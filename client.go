@@ -149,7 +149,7 @@ func (c *Client) tryAcquire(l *Lock) error {
 }
 
 func (c *Client) storeAcquire(l *Lock) error {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), l.leaseDuration)
 	defer cancel()
 	tx, err := c.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
 	if err != nil {
@@ -217,7 +217,7 @@ func (c *Client) Release(l *Lock) error {
 func (c *Client) storeRelease(l *Lock) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), l.leaseDuration)
 	defer cancel()
 	tx, err := c.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
 	if err != nil {
@@ -287,7 +287,7 @@ func (c *Client) heartbeat(ctx context.Context, l *Lock) {
 func (c *Client) storeHeartbeat(l *Lock) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), l.leaseDuration)
 	defer cancel()
 	tx, err := c.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
 	if err != nil {
@@ -337,7 +337,7 @@ func (c *Client) GetData(name string) ([]byte, error) {
 }
 
 func (c *Client) getLock(name string) ([]byte, error) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), c.leaseDuration)
 	defer cancel()
 	row := c.db.QueryRowContext(ctx, `
 		SELECT
