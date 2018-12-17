@@ -10,6 +10,8 @@ fine-grained and coarse-grained locking as the lock keys can be any arbitrary
 string, up to a certain length. Please create issues in the GitHub repository
 with questions, pull request are very much welcome.
 
+_Recommended version: 9.6 or newer_
+
 ## Logic to avoid problems with clock skew
 The lock client never stores absolute times in PostgreSQL. The way locks are
 expired is that a call to acquireLock reads in the current lock, checks the
