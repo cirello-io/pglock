@@ -114,27 +114,37 @@ func (c *Client) CreateTable() error {
 	return errors.E(err, "cannot create the table")
 }
 
-// Acquire attempts to grab the lock with the given key name, wait until it
+// Acquire attempts to grab the lock with the given key name and wait until it
 // succeeds.
 func (c *Client) Acquire(name string, opts ...Option) (*Lock, error) {
+	return c.AcquireContext(context.Background(), name, opts...)
+}
+
+// AcquireContext attempts to grab the lock with the given key name, wait until
+// it succeeds or the context is done.
+func (c *Client) AcquireContext(ctx context.Context, name string, opts ...Option) (*Lock, error) {
 	l := c.newLock(name, opts)
 	for {
-		err := c.tryAcquire(l)
-		if l.failIfLocked && err == ErrNotAcquired {
-			c.log.Println("not acquired, exit")
-			return l, err
-		} else if err == ErrNotAcquired {
-			c.log.Println("not acquired, wait:", l.leaseDuration)
-			time.Sleep(l.leaseDuration)
-			continue
-		} else if errors.Is(errors.FailedPrecondition, err) {
-			c.log.Println("bad transaction, retrying:", err)
-			continue
-		} else if err != nil {
-			c.log.Println("error:", err)
-			return nil, err
+		select {
+		case <-ctx.Done():
+		default:
+			err := c.tryAcquire(l)
+			if l.failIfLocked && err == ErrNotAcquired {
+				c.log.Println("not acquired, exit")
+				return l, err
+			} else if err == ErrNotAcquired {
+				c.log.Println("not acquired, wait:", l.leaseDuration)
+				time.Sleep(l.leaseDuration)
+				continue
+			} else if errors.Is(errors.FailedPrecondition, err) {
+				c.log.Println("bad transaction, retrying:", err)
+				continue
+			} else if err != nil {
+				c.log.Println("error:", err)
+				return nil, err
+			}
+			return l, nil
 		}
-		return l, nil
 	}
 }
 
