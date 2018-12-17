@@ -29,7 +29,7 @@ import (
 	"cirello.io/pglock"
 )
 
-var dsn = flag.String("dsn", "postgres://postgres@localhost/locktest?sslmode=disable", "connection string to the test database server")
+var dsn = flag.String("dsn", "postgres://postgres@localhost/postgres?sslmode=disable", "connection string to the test database server")
 
 func init() {
 	flag.Parse()

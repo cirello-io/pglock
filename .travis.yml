@@ -5,12 +5,11 @@ go:
   - "1.11"
 
 services:
-  - postgresql
+  - docker
 
 install: true
 
-before_script:
-  - psql -c 'create database locktest;' -U postgres
-
 script:
+  - docker run -d --name pg -p 5432:5432 postgres:9.6
+  - docker exec pg psql -c 'create database locktest;' -U postgres
   - go test -v ./...
