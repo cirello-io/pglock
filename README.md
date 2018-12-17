@@ -1,5 +1,7 @@
 # PostgreSQL Lock Client for Go
 
+[![Build Status](https://travis-ci.org/ucirello/pglock.svg?branch=master)](https://travis-ci.org/ucirello/pglock)
+
 This repository is covered by this [SLA](https://github.com/ucirello/public/blob/master/SLA.md).
 
 The PostgreSQL Lock Client for Go is a general purpose distributed locking
