@@ -1,0 +1,23 @@
+language: go
+sudo: required
+go_import_path: cirello.io/pglock
+go:
+  - "1.11"
+
+addons:
+  postgresql: "10"
+  apt:
+    packages:
+    - postgresql-10
+    - postgresql-client-10
+
+services:
+  - postgresql
+
+install: true
+
+before_script:
+  - psql -c 'create database locktest;' -U postgres
+
+script:
+  - go test -v ./...
