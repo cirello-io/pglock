@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package pglock // import "cirello.io/pglock"
+package pglock
 
 import (
 	"context"
@@ -24,7 +24,6 @@ import (
 	"time"
 
 	"cirello.io/errors"
-	"github.com/davecgh/go-spew/spew"
 	"github.com/lib/pq"
 )
 
@@ -178,7 +177,6 @@ func (c *Client) storeAcquire(l *Lock) error {
 			OR `+c.tableName+`."record_version_number" = $4
 	`, l.name, rvn, l.data, l.recordVersionNumber, l.replaceData)
 	if err != nil {
-		spew.Dump(c.tableName, err)
 		return errors.E(errors.FailedPrecondition, err, "cannot run query to acquire lock")
 	}
 	row := tx.QueryRowContext(ctx, `SELECT "record_version_number", "data" FROM `+c.tableName+` WHERE name = $1 FOR UPDATE`, l.name)
