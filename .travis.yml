@@ -4,13 +4,6 @@ go_import_path: cirello.io/pglock
 go:
   - "1.11"
 
-addons:
-  postgresql: "10"
-  apt:
-    packages:
-    - postgresql-10
-    - postgresql-client-10
-
 services:
   - postgresql
 
