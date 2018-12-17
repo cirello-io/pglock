@@ -11,5 +11,4 @@ install: true
 
 script:
   - docker run -d --name pg -p 5433:5432 postgres:9.6
-  - docker exec pg psql -c 'create database locktest;' -U postgres
   - go test -v ./... -dsn=postgres://postgres:mysecretpassword@localhost:5433/postgres?sslmode=disable
