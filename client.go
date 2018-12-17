@@ -127,6 +127,7 @@ func (c *Client) AcquireContext(ctx context.Context, name string, opts ...Option
 	for {
 		select {
 		case <-ctx.Done():
+			return nil, ErrNotAcquired
 		default:
 			err := c.tryAcquire(l)
 			if l.failIfLocked && err == ErrNotAcquired {
