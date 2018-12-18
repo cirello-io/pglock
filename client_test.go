@@ -45,7 +45,7 @@ func init() {
 }
 
 func TestFailIfLocked(t *testing.T) {
-	// t.Parallel()
+	t.Parallel()
 	db, err := sql.Open("postgres", *dsn)
 	if err != nil {
 		t.Fatal("cannot connect to test database server:", err)
@@ -72,7 +72,7 @@ func TestFailIfLocked(t *testing.T) {
 }
 
 func TestDeleteOnRelease(t *testing.T) {
-	// t.Parallel()
+	t.Parallel()
 	db, err := sql.Open("postgres", *dsn)
 	if err != nil {
 		t.Fatal("cannot connect to test database server:", err)
@@ -99,7 +99,7 @@ func TestDeleteOnRelease(t *testing.T) {
 }
 
 func TestClose(t *testing.T) {
-	// t.Parallel()
+	t.Parallel()
 	db, err := sql.Open("postgres", *dsn)
 	if err != nil {
 		t.Fatal("cannot connect to test database server:", err)
@@ -126,7 +126,7 @@ func TestClose(t *testing.T) {
 }
 
 func TestAcquire(t *testing.T) {
-	// t.Parallel()
+	t.Parallel()
 	db, err := sql.Open("postgres", *dsn)
 	if err != nil {
 		t.Fatal("cannot connect to test database server:", err)
@@ -168,7 +168,7 @@ func TestAcquire(t *testing.T) {
 }
 
 func TestGet(t *testing.T) {
-	// t.Parallel()
+	t.Parallel()
 	db, err := sql.Open("postgres", *dsn)
 	if err != nil {
 		t.Fatal("cannot connect to test database server:", err)
@@ -197,7 +197,7 @@ func TestGet(t *testing.T) {
 }
 
 func TestLockData(t *testing.T) {
-	// t.Parallel()
+	t.Parallel()
 	t.Run("reuse lock data", func(t *testing.T) {
 		db, err := sql.Open("postgres", *dsn)
 		if err != nil {
@@ -267,7 +267,7 @@ func TestLockData(t *testing.T) {
 }
 
 func TestCustomTable(t *testing.T) {
-	// t.Parallel()
+	t.Parallel()
 	db, err := sql.Open("postgres", *dsn)
 	if err != nil {
 		t.Fatal("cannot connect to test database server:", err)
