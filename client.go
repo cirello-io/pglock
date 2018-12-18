@@ -21,6 +21,7 @@ import (
 	"database/sql"
 	"io/ioutil"
 	"log"
+	"net"
 	"time"
 
 	"cirello.io/errors"
@@ -188,7 +189,7 @@ func (c *Client) storeAcquire(l *Lock) error {
 			OR `+c.tableName+`."record_version_number" = $4
 	`, l.name, rvn, l.data, l.recordVersionNumber, l.replaceData)
 	if err != nil {
-		return errors.E(errors.FailedPrecondition, err, "cannot run query to acquire lock")
+		return typedError(err, "cannot run query to acquire lock")
 	}
 	row := tx.QueryRowContext(ctx, `SELECT "record_version_number", "data" FROM `+c.tableName+` WHERE name = $1 FOR UPDATE`, l.name)
 	var actualRVN string
@@ -196,14 +197,14 @@ func (c *Client) storeAcquire(l *Lock) error {
 	if err := row.Scan(&actualRVN, &data); err == sql.ErrNoRows {
 		return ErrLockNotFound
 	} else if err != nil {
-		return errors.E(errors.FailedPrecondition, err, "cannot load information for lock acquisition")
+		return typedError(err, "cannot load information for lock acquisition")
 	}
 	if actualRVN != rvn {
 		l.recordVersionNumber = actualRVN
 		return ErrNotAcquired
 	}
 	if err := tx.Commit(); err != nil {
-		return errors.E(errors.FailedPrecondition, err, "cannot commit lock acquisition")
+		return typedError(err, "cannot commit lock acquisition")
 	}
 	l.recordVersionNumber = rvn
 	l.data = data
@@ -244,11 +245,11 @@ func (c *Client) storeRelease(l *Lock) error {
 			AND "record_version_number" = $2
 	`, l.name, l.recordVersionNumber)
 	if err != nil {
-		return errors.E(errors.FailedPrecondition, err, "cannot run query to release lock")
+		return typedError(err, "cannot run query to release lock")
 	}
 	affected, err := result.RowsAffected()
 	if err != nil {
-		return errors.E(errors.FailedPrecondition, err, "cannot confirm whether the lock has been released")
+		return typedError(err, "cannot confirm whether the lock has been released")
 	} else if affected == 0 {
 		l.isReleased = true
 		l.heartbeatCancel()
@@ -262,11 +263,11 @@ func (c *Client) storeRelease(l *Lock) error {
 			"name" = $1
 			AND "record_version_number" IS NULL`, l.name)
 		if err != nil {
-			return errors.E(errors.FailedPrecondition, err, "cannot run query to delete lock")
+			return typedError(err, "cannot run query to delete lock")
 		}
 	}
 	if err := tx.Commit(); err != nil {
-		return errors.E(errors.FailedPrecondition, err, "cannot commit lock release")
+		return typedError(err, "cannot commit lock release")
 	}
 	l.isReleased = true
 	l.heartbeatCancel()
@@ -315,17 +316,17 @@ func (c *Client) storeHeartbeat(l *Lock) error {
 			AND "record_version_number" = $2
 	`, l.name, l.recordVersionNumber, rvn)
 	if err != nil {
-		return errors.E(errors.FailedPrecondition, err, "cannot run query to update the heartbeat")
+		return typedError(err, "cannot run query to update the heartbeat")
 	}
 	affected, err := result.RowsAffected()
 	if err != nil {
-		return errors.E(errors.FailedPrecondition, err, "cannot confirm whether the lock has been updated for the heartbeat")
+		return typedError(err, "cannot confirm whether the lock has been updated for the heartbeat")
 	} else if affected == 0 {
 		l.isReleased = true
 		return ErrLockAlreadyReleased
 	}
 	if err := tx.Commit(); err != nil {
-		return errors.E(errors.FailedPrecondition, err, "cannot commit lock heartbeat")
+		return typedError(err, "cannot commit lock heartbeat")
 	}
 	l.recordVersionNumber = rvn
 	return nil
@@ -364,7 +365,7 @@ func (c *Client) getLock(name string) ([]byte, error) {
 	if err == sql.ErrNoRows {
 		return data, ErrLockNotFound
 	}
-	return data, errors.E(errors.FailedPrecondition, err, "cannot load the data of this lock")
+	return data, typedError(err, "cannot load the data of this lock")
 }
 
 // ClientOption reconfigures the lock client
@@ -391,4 +392,23 @@ func WithHeartbeatFrequency(d time.Duration) ClientOption {
 // name.
 func WithCustomTable(tableName string) ClientOption {
 	return func(c *Client) { c.tableName = tableName }
+}
+
+func typedError(err error, v ...interface{}) error {
+	const serializationErrorCode = "40001"
+	if err == nil {
+		return nil
+	} else if err == sql.ErrNoRows {
+		args := append([]interface{}{errors.NotExist, err}, v...)
+		return errors.E(args...)
+	} else if _, ok := err.(*net.OpError); ok {
+		args := append([]interface{}{errors.Unavailable, err}, v...)
+		return errors.E(args...)
+	} else if e, ok := err.(*pq.Error); ok {
+		if e.Code == serializationErrorCode {
+			args := append([]interface{}{errors.FailedPrecondition, err}, v...)
+			return errors.E(args...)
+		}
+	}
+	return err
 }
