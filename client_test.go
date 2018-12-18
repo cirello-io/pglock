@@ -299,6 +299,10 @@ func TestCustomTable(t *testing.T) {
 
 var chars = []byte("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
 
+func init() {
+	rand.Seed(time.Now().UnixNano())
+}
+
 func randStr(n int) string {
 	var b bytes.Buffer
 	for i := 0; i < n; i++ {
