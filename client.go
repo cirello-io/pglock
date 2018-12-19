@@ -165,7 +165,7 @@ func (c *Client) storeAcquire(l *Lock) error {
 	defer cancel()
 	tx, err := c.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
 	if err != nil {
-		return errors.E(err, "cannot create transaction for lock acquisition")
+		return typedError(err, "cannot create transaction for lock acquisition")
 	}
 	rvn := randString(32)
 	c.log.Println("storeAcquire in", l.name, rvn, l.data, l.recordVersionNumber)
@@ -233,7 +233,7 @@ func (c *Client) storeRelease(l *Lock) error {
 	defer cancel()
 	tx, err := c.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
 	if err != nil {
-		return errors.E(err, "cannot create transaction for lock acquisition")
+		return typedError(err, "cannot create transaction for lock acquisition")
 	}
 	result, err := tx.ExecContext(ctx, `
 		UPDATE
@@ -303,7 +303,7 @@ func (c *Client) storeHeartbeat(l *Lock) error {
 	defer cancel()
 	tx, err := c.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
 	if err != nil {
-		return errors.E(err, "cannot create transaction for lock acquisition")
+		return typedError(err, "cannot create transaction for lock acquisition")
 	}
 	rvn := randString(32)
 	result, err := tx.ExecContext(ctx, `
