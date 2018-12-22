@@ -122,7 +122,8 @@ func (c *Client) Acquire(name string, opts ...Option) (*Lock, error) {
 }
 
 // AcquireContext attempts to grab the lock with the given key name, wait until
-// it succeeds or the context is done.
+// it succeeds or the context is done. It returns ErrNotAcquired if the context
+// is canceled before the lock is acquired.
 func (c *Client) AcquireContext(ctx context.Context, name string, opts ...Option) (*Lock, error) {
 	l := c.newLock(name, opts)
 	for {
@@ -130,7 +131,7 @@ func (c *Client) AcquireContext(ctx context.Context, name string, opts ...Option
 		case <-ctx.Done():
 			return nil, ErrNotAcquired
 		default:
-			err := c.tryAcquire(l)
+			err := c.tryAcquire(ctx, l)
 			if l.failIfLocked && err == ErrNotAcquired {
 				c.log.Println("not acquired, exit")
 				return l, err
@@ -150,18 +151,18 @@ func (c *Client) AcquireContext(ctx context.Context, name string, opts ...Option
 	}
 }
 
-func (c *Client) tryAcquire(l *Lock) error {
-	err := c.storeAcquire(l)
+func (c *Client) tryAcquire(ctx context.Context, l *Lock) error {
+	err := c.storeAcquire(ctx, l)
 	if err == nil {
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(ctx)
 		l.heartbeatCancel = cancel
 		go c.heartbeat(ctx, l)
 	}
 	return err
 }
 
-func (c *Client) storeAcquire(l *Lock) error {
-	ctx, cancel := context.WithTimeout(context.Background(), l.leaseDuration)
+func (c *Client) storeAcquire(ctx context.Context, l *Lock) error {
+	ctx, cancel := context.WithTimeout(ctx, l.leaseDuration)
 	defer cancel()
 	tx, err := c.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
 	if err != nil {
@@ -213,11 +214,17 @@ func (c *Client) storeAcquire(l *Lock) error {
 
 // Release will update the mutex entry to be able to be taken by other clients.
 func (c *Client) Release(l *Lock) error {
+	return c.ReleaseContext(context.Background(), l)
+}
+
+// ReleaseContext will update the mutex entry to be able to be taken by other
+// clients.
+func (c *Client) ReleaseContext(ctx context.Context, l *Lock) error {
 	if l.IsReleased() {
 		return ErrLockAlreadyReleased
 	}
 	for {
-		err := c.storeRelease(l)
+		err := c.storeRelease(ctx, l)
 		if errors.Is(errors.FailedPrecondition, err) {
 			c.log.Println("cannot release lock, trying again:", err)
 			continue
@@ -226,10 +233,10 @@ func (c *Client) Release(l *Lock) error {
 	}
 }
 
-func (c *Client) storeRelease(l *Lock) error {
+func (c *Client) storeRelease(ctx context.Context, l *Lock) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	ctx, cancel := context.WithTimeout(context.Background(), l.leaseDuration)
+	ctx, cancel := context.WithTimeout(ctx, l.leaseDuration)
 	defer cancel()
 	tx, err := c.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
 	if err != nil {
@@ -332,11 +339,17 @@ func (c *Client) storeHeartbeat(l *Lock) error {
 	return nil
 }
 
-// GetData returns the data field from the given lock in the table without holding
-// the lock first
+// GetData returns the data field from the given lock in the table
+// without holding the lock first.
 func (c *Client) GetData(name string) ([]byte, error) {
+	return c.GetDataContext(context.Background(), name)
+}
+
+// GetDataContext returns the data field from the given lock in the table
+// without holding the lock first.
+func (c *Client) GetDataContext(ctx context.Context, name string) ([]byte, error) {
 	for {
-		data, err := c.getLock(name)
+		data, err := c.getLock(ctx, name)
 		if errors.Is(errors.FailedPrecondition, err) {
 			c.log.Println("cannot get lock entry:", err)
 			continue
@@ -348,8 +361,8 @@ func (c *Client) GetData(name string) ([]byte, error) {
 	}
 }
 
-func (c *Client) getLock(name string) ([]byte, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), c.leaseDuration)
+func (c *Client) getLock(ctx context.Context, name string) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(ctx, c.leaseDuration)
 	defer cancel()
 	row := c.db.QueryRowContext(ctx, `
 		SELECT

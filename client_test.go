@@ -18,6 +18,7 @@ package pglock_test
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
 	"flag"
 	"log"
@@ -295,6 +296,27 @@ func TestCustomTable(t *testing.T) {
 	}
 	defer l1.Close()
 	t.Log("first lock stored")
+}
+
+func TestCanceledContext(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	db, err := sql.Open("postgres", *dsn)
+	if err != nil {
+		t.Fatal("cannot connect to test database server:", err)
+	}
+	name := randStr(32)
+	c, err := pglock.New(
+		db,
+		pglock.WithLogger(&testLogger{t}),
+	)
+	if err != nil {
+		t.Fatal("cannot create lock client:", err)
+	}
+	if _, err := c.AcquireContext(ctx, name); err != pglock.ErrNotAcquired {
+		t.Fatal("canceled context should not be able to acquire locks")
+	}
 }
 
 var chars = []byte("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
