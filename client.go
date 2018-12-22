@@ -54,7 +54,6 @@ var (
 	ErrDurationTooSmall = errors.E("Heartbeat period must be no more than half the length of the Lease Duration, " +
 		"or locks might expire due to the heartbeat thread taking too long to update them (recommendation is to make it much greater, for example " +
 		"4+ times greater)")
-	ErrInvalidHeartbeatFrequency = errors.E("heartbeat frequency must be bigger than 0")
 )
 
 // Client is the PostgreSQL's backed distributed lock. Make sure it is always
