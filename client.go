@@ -212,6 +212,48 @@ func (c *Client) storeAcquire(ctx context.Context, l *Lock) error {
 	return nil
 }
 
+func (c *Client) Do(ctx context.Context, name string, f func(context.Context, *Lock) error, opts ...Option) error {
+	l := c.newLock(name, opts)
+	for {
+		select {
+		case <-ctx.Done():
+			return ErrNotAcquired
+		default:
+			err := c.do(ctx, l, f)
+			if l.failIfLocked && err == ErrNotAcquired {
+				c.log.Println("not acquired, exit")
+				return err
+			} else if err == ErrNotAcquired {
+				c.log.Println("not acquired, wait:", l.leaseDuration)
+				time.Sleep(l.leaseDuration)
+				continue
+			} else if errors.Is(errors.FailedPrecondition, err) {
+				c.log.Println("bad transaction, retrying:", err)
+				continue
+			} else if err != nil {
+				c.log.Println("error:", err)
+				return err
+			}
+			return nil
+		}
+	}
+}
+
+func (c *Client) do(ctx context.Context, l *Lock, f func(context.Context, *Lock) error) error {
+	err := c.storeAcquire(ctx, l)
+	if err == nil {
+		ctx, cancel := context.WithCancel(ctx)
+		defer cancel()
+		l.heartbeatCancel = cancel
+		go func() {
+			defer cancel()
+			c.heartbeat(ctx, l)
+		}()
+		return f(ctx, l)
+	}
+	return err
+}
+
 // Release will update the mutex entry to be able to be taken by other clients.
 func (c *Client) Release(l *Lock) error {
 	return c.ReleaseContext(context.Background(), l)
@@ -282,31 +324,43 @@ func (c *Client) storeRelease(ctx context.Context, l *Lock) error {
 }
 
 func (c *Client) heartbeat(ctx context.Context, l *Lock) {
+	if c.heartbeatFrequency <= 0 {
+		c.log.Println("heartbeat disabled:", l.name)
+		return
+	}
 	defer c.log.Println("heartbeat stopped:", l.name)
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-time.After(c.heartbeatFrequency):
-			for {
-				err := c.storeHeartbeat(l)
-				if errors.Is(errors.FailedPrecondition, err) {
-					c.log.Println("heartbeat retry:", l.name, err)
-					continue
-				} else if err != nil {
-					c.log.Println("heartbeat missed:", l.name, err)
-					return
-				}
-				break
+			if err := c.SendHeartbeat(ctx, l); err != nil {
+				c.log.Println("heartbeat missed:", l.name, err)
+				return
 			}
 		}
 	}
 }
 
-func (c *Client) storeHeartbeat(l *Lock) error {
+// SendHeartbeat refreshes the mutex entry so to avoid other clients from
+// grabbing it.
+func (c *Client) SendHeartbeat(ctx context.Context, l *Lock) error {
+	for {
+		err := c.storeHeartbeat(ctx, l)
+		if errors.Is(errors.FailedPrecondition, err) {
+			c.log.Println("SendHeartbeat retry:", l.name, err)
+			continue
+		} else if err != nil {
+			return errors.Wrapf(err, "cannot send heartbeat: %v", l.name)
+		}
+		return nil
+	}
+}
+
+func (c *Client) storeHeartbeat(ctx context.Context, l *Lock) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	ctx, cancel := context.WithTimeout(context.Background(), l.leaseDuration)
+	ctx, cancel := context.WithTimeout(ctx, l.leaseDuration)
 	defer cancel()
 	tx, err := c.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
 	if err != nil {

@@ -27,7 +27,9 @@ import (
 	"testing"
 	"time"
 
+	"cirello.io/errors"
 	"cirello.io/pglock"
+	"github.com/lib/pq"
 )
 
 var dsn = flag.String("dsn", "postgres://postgres@localhost/postgres?sslmode=disable", "connection string to the test database server")
@@ -316,6 +318,66 @@ func TestCanceledContext(t *testing.T) {
 	}
 	if _, err := c.AcquireContext(ctx, name); err != pglock.ErrNotAcquired {
 		t.Fatal("canceled context should not be able to acquire locks")
+	}
+}
+
+func TestDo(t *testing.T) {
+	t.Parallel()
+	db, err := sql.Open("postgres", *dsn)
+	if err != nil {
+		t.Fatal("cannot connect to test database server:", err)
+	}
+	name := randStr(32)
+	c, err := pglock.New(
+		db,
+		pglock.WithLogger(&testLogger{t}),
+		pglock.WithLeaseDuration(5*time.Second),
+		pglock.WithHeartbeatFrequency(1*time.Second),
+	)
+	if err != nil {
+		t.Fatal("cannot create lock client:", err)
+	}
+	ranOnce := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		err = c.Do(context.Background(), name, func(ctx context.Context, l *pglock.Lock) error {
+			once := make(chan struct{}, 1)
+			once <- struct{}{}
+			for {
+				select {
+				case <-ctx.Done():
+					t.Log("context canceled")
+					return ctx.Err()
+				case <-once:
+					t.Log("executed once")
+					close(ranOnce)
+				}
+			}
+		})
+		if err != nil && err != context.Canceled {
+			t.Fatal("unexpected error while running under lock:", err)
+		}
+	}()
+	<-ranOnce
+	t.Log("directly releasing lock")
+	if err := releaseLockByName(db, name); err != nil {
+		t.Fatal("cannot forcefully release lock")
+	}
+	wg.Wait()
+}
+
+func releaseLockByName(db *sql.DB, name string) error {
+	const serializationErrorCode = "40001"
+	for {
+		_, err := db.Exec("UPDATE locks SET record_version_number = NULL WHERE name = $1", name)
+		if e, ok := err.(*pq.Error); ok {
+			if e.Code == serializationErrorCode {
+				continue
+			}
+		}
+		return errors.E(err, "cannot release lock by name")
 	}
 }
 
