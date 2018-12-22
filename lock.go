@@ -29,10 +29,10 @@ type Lock struct {
 	heartbeatCancel context.CancelFunc
 	leaseDuration   time.Duration
 
-	replaceData     bool
-	data            []byte
-	failIfLocked    bool
-	deleteOnRelease bool
+	replaceData   bool
+	data          []byte
+	failIfLocked  bool
+	keepOnRelease bool
 
 	mu                  sync.Mutex
 	isReleased          bool
@@ -74,11 +74,10 @@ func WithData(data []byte) LockOption {
 	}
 }
 
-// DeleteOnRelease defines whether or not the lock should be deleted
-// when Close() is called on the lock item.
-func DeleteOnRelease() LockOption {
+// KeepOnRelease preserves the lock entry when Close() is called on the lock.
+func KeepOnRelease() LockOption {
 	return func(l *Lock) {
-		l.deleteOnRelease = true
+		l.keepOnRelease = true
 	}
 }
 

@@ -308,7 +308,7 @@ func (c *Client) storeRelease(ctx context.Context, l *Lock) error {
 		l.heartbeatCancel()
 		return ErrLockAlreadyReleased
 	}
-	if l.deleteOnRelease {
+	if !l.keepOnRelease {
 		_, err := tx.ExecContext(ctx, `
 		DELETE FROM
 			`+c.tableName+`

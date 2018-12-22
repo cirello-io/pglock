@@ -74,7 +74,7 @@ func TestFailIfLocked(t *testing.T) {
 	}
 }
 
-func TestDeleteOnRelease(t *testing.T) {
+func TestKeepOnRelease(t *testing.T) {
 	t.Parallel()
 	db, err := sql.Open("postgres", *dsn)
 	if err != nil {
@@ -90,14 +90,22 @@ func TestDeleteOnRelease(t *testing.T) {
 	if err != nil {
 		t.Fatal("cannot create lock client:", err)
 	}
-	l, err := c.Acquire(name, pglock.DeleteOnRelease())
+	expected := []byte("42")
+	l, err := c.Acquire(name, pglock.KeepOnRelease(), pglock.WithData(expected))
 	if err != nil {
 		t.Fatal("unexpected error while acquiring lock:", err)
 	}
 	t.Log("lock acquired")
 	l.Close()
-	if err := l.Close(); err != nil && err != pglock.ErrLockAlreadyReleased {
-		t.Fatal("close not idempotent - second lock release should always work:", err)
+
+	l2, err := c.Acquire(name)
+	if err != nil {
+		t.Fatal("unexpected error while acquiring lock:", err)
+	}
+	t.Log("lock reacquired")
+	defer l.Close()
+	if !bytes.Equal(l2.Data(), expected) {
+		t.Fatal("lock content lost")
 	}
 }
 
