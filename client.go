@@ -83,13 +83,14 @@ func New(db *sql.DB, opts ...ClientOption) (*Client, error) {
 	for _, opt := range opts {
 		opt(c)
 	}
-	if c.heartbeatFrequency <= 0 {
-		return nil, ErrInvalidHeartbeatFrequency
-	}
-	if c.leaseDuration < 2*c.heartbeatFrequency {
+	if isDurationTooSmall(c) {
 		return nil, ErrDurationTooSmall
 	}
 	return c, nil
+}
+
+func isDurationTooSmall(c *Client) bool {
+	return c.heartbeatFrequency > 0 && c.leaseDuration < 2*c.heartbeatFrequency
 }
 
 func (c *Client) newLock(name string, opts []Option) *Lock {
