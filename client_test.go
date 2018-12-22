@@ -323,49 +323,79 @@ func TestCanceledContext(t *testing.T) {
 
 func TestDo(t *testing.T) {
 	t.Parallel()
-	db, err := sql.Open("postgres", *dsn)
-	if err != nil {
-		t.Fatal("cannot connect to test database server:", err)
-	}
-	name := randStr(32)
-	c, err := pglock.New(
-		db,
-		pglock.WithLogger(&testLogger{t}),
-		pglock.WithLeaseDuration(5*time.Second),
-		pglock.WithHeartbeatFrequency(1*time.Second),
-	)
-	if err != nil {
-		t.Fatal("cannot create lock client:", err)
-	}
-	ranOnce := make(chan struct{})
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		err = c.Do(context.Background(), name, func(ctx context.Context, l *pglock.Lock) error {
-			once := make(chan struct{}, 1)
-			once <- struct{}{}
-			for {
-				select {
-				case <-ctx.Done():
-					t.Log("context canceled")
-					return ctx.Err()
-				case <-once:
-					t.Log("executed once")
-					close(ranOnce)
+
+	t.Run("lost lock", func(t *testing.T) {
+		db, err := sql.Open("postgres", *dsn)
+		if err != nil {
+			t.Fatal("cannot connect to test database server:", err)
+		}
+		name := randStr(32)
+		c, err := pglock.New(
+			db,
+			pglock.WithLogger(&testLogger{t}),
+			pglock.WithLeaseDuration(5*time.Second),
+			pglock.WithHeartbeatFrequency(1*time.Second),
+		)
+		if err != nil {
+			t.Fatal("cannot create lock client:", err)
+		}
+		ranOnce := make(chan struct{})
+		var wg sync.WaitGroup
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			err = c.Do(context.Background(), name, func(ctx context.Context, l *pglock.Lock) error {
+				once := make(chan struct{}, 1)
+				once <- struct{}{}
+				for {
+					select {
+					case <-ctx.Done():
+						t.Log("context canceled")
+						return ctx.Err()
+					case <-once:
+						t.Log("executed once")
+						close(ranOnce)
+					}
 				}
+			})
+			if err != nil && err != context.Canceled {
+				t.Fatal("unexpected error while running under lock:", err)
 			}
+		}()
+		<-ranOnce
+		t.Log("directly releasing lock")
+		if err := releaseLockByName(db, name); err != nil {
+			t.Fatal("cannot forcefully release lock")
+		}
+		wg.Wait()
+	})
+
+	t.Run("normally completed", func(t *testing.T) {
+		db, err := sql.Open("postgres", *dsn)
+		if err != nil {
+			t.Fatal("cannot connect to test database server:", err)
+		}
+		name := randStr(32)
+		c, err := pglock.New(
+			db,
+			pglock.WithLogger(&testLogger{t}),
+			pglock.WithLeaseDuration(5*time.Second),
+			pglock.WithHeartbeatFrequency(1*time.Second),
+		)
+		if err != nil {
+			t.Fatal("cannot create lock client:", err)
+		}
+		err = c.Do(context.Background(), name, func(ctx context.Context, l *pglock.Lock) error {
+			for i := 0; i < 5; i++ {
+				t.Log("i = ", i)
+				time.Sleep(1 * time.Second)
+			}
+			return nil
 		})
 		if err != nil && err != context.Canceled {
 			t.Fatal("unexpected error while running under lock:", err)
 		}
-	}()
-	<-ranOnce
-	t.Log("directly releasing lock")
-	if err := releaseLockByName(db, name); err != nil {
-		t.Fatal("cannot forcefully release lock")
-	}
-	wg.Wait()
+	})
 }
 
 func releaseLockByName(db *sql.DB, name string) error {

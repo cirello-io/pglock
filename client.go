@@ -213,8 +213,12 @@ func (c *Client) storeAcquire(ctx context.Context, l *Lock) error {
 	return nil
 }
 
+// Do executes f while holding the lock for the named lock. When the lock loss
+// is detected in the heartbeat, it is going to cancel the context passed on to
+// f. If it ends normally (err == nil), it releases the lock.
 func (c *Client) Do(ctx context.Context, name string, f func(context.Context, *Lock) error, opts ...Option) error {
 	l := c.newLock(name, opts)
+	defer l.Close()
 	for {
 		select {
 		case <-ctx.Done():
