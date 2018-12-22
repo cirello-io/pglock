@@ -54,6 +54,27 @@ limitations under the License.
 // 	l1.Close()
 // 	wg.Wait()
 //
+// pglock.Client.Do can be used for long-running processes:
+//
+// 	err = c.Do(context.Background(), name, func(ctx context.Context, l *pglock.Lock) error {
+// 		once := make(chan struct{}, 1)
+// 		once <- struct{}{}
+// 		for {
+// 			select {
+// 			case <-ctx.Done():
+// 				t.Log("context canceled")
+// 				return ctx.Err()
+// 			case <-once:
+// 				t.Log("executed once")
+// 				close(ranOnce)
+// 			}
+// 		}
+// 	})
+// 	if err != nil && err != context.Canceled {
+// 		t.Fatal("unexpected error while running under lock:", err)
+// 	}
+//
+//
 // This package is covered by this SLA:
 // https://github.com/ucirello/public/blob/master/SLA.md
 //
