@@ -93,7 +93,7 @@ func isDurationTooSmall(c *Client) bool {
 	return c.heartbeatFrequency > 0 && c.leaseDuration < 2*c.heartbeatFrequency
 }
 
-func (c *Client) newLock(name string, opts []Option) *Lock {
+func (c *Client) newLock(name string, opts []LockOption) *Lock {
 	l := &Lock{
 		client:        c,
 		name:          name,
@@ -118,14 +118,14 @@ func (c *Client) CreateTable() error {
 
 // Acquire attempts to grab the lock with the given key name and wait until it
 // succeeds.
-func (c *Client) Acquire(name string, opts ...Option) (*Lock, error) {
+func (c *Client) Acquire(name string, opts ...LockOption) (*Lock, error) {
 	return c.AcquireContext(context.Background(), name, opts...)
 }
 
 // AcquireContext attempts to grab the lock with the given key name, wait until
 // it succeeds or the context is done. It returns ErrNotAcquired if the context
 // is canceled before the lock is acquired.
-func (c *Client) AcquireContext(ctx context.Context, name string, opts ...Option) (*Lock, error) {
+func (c *Client) AcquireContext(ctx context.Context, name string, opts ...LockOption) (*Lock, error) {
 	l := c.newLock(name, opts)
 	for {
 		select {
@@ -216,7 +216,7 @@ func (c *Client) storeAcquire(ctx context.Context, l *Lock) error {
 // Do executes f while holding the lock for the named lock. When the lock loss
 // is detected in the heartbeat, it is going to cancel the context passed on to
 // f. If it ends normally (err == nil), it releases the lock.
-func (c *Client) Do(ctx context.Context, name string, f func(context.Context, *Lock) error, opts ...Option) error {
+func (c *Client) Do(ctx context.Context, name string, f func(context.Context, *Lock) error, opts ...LockOption) error {
 	l := c.newLock(name, opts)
 	defer l.Close()
 	for {

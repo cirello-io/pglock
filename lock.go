@@ -57,18 +57,18 @@ func (l *Lock) IsReleased() bool {
 	return l.isReleased
 }
 
-// Option reconfigures how the lock behaves on acquire and release.
-type Option func(*Lock)
+// LockOption reconfigures how the lock behaves on acquire and release.
+type LockOption func(*Lock)
 
 // FailIfLocked will not retry to acquire the lock, instead returning.
-func FailIfLocked() Option {
+func FailIfLocked() LockOption {
 	return func(l *Lock) {
 		l.failIfLocked = true
 	}
 }
 
 // WithData creates lock with data.
-func WithData(data []byte) Option {
+func WithData(data []byte) LockOption {
 	return func(l *Lock) {
 		l.data = data
 	}
@@ -76,14 +76,14 @@ func WithData(data []byte) Option {
 
 // DeleteOnRelease defines whether or not the lock should be deleted
 // when Close() is called on the lock item.
-func DeleteOnRelease() Option {
+func DeleteOnRelease() LockOption {
 	return func(l *Lock) {
 		l.deleteOnRelease = true
 	}
 }
 
 // ReplaceData will force the new content to be stored in the lock entry.
-func ReplaceData() Option {
+func ReplaceData() LockOption {
 	return func(l *Lock) {
 		l.replaceData = true
 	}
