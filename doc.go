@@ -71,7 +71,7 @@ limitations under the License.
 // 		}
 // 	})
 // 	if err != nil && err != context.Canceled {
-// 		t.Fatal("unexpected error while running under lock:", err)
+// 		log.Fatal("unexpected error while running under lock:", err)
 // 	}
 //
 //
