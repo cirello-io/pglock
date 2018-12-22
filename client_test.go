@@ -69,7 +69,7 @@ func TestFailIfLocked(t *testing.T) {
 	}
 	defer l.Close()
 	t.Log("first lock acquired")
-	if _, err := c.Acquire(name, pglock.FailIfLocked); err != pglock.ErrNotAcquired {
+	if _, err := c.Acquire(name, pglock.FailIfLocked()); err != pglock.ErrNotAcquired {
 		t.Fatal("expected ErrNotAcquired")
 	}
 }
@@ -90,7 +90,7 @@ func TestDeleteOnRelease(t *testing.T) {
 	if err != nil {
 		t.Fatal("cannot create lock client:", err)
 	}
-	l, err := c.Acquire(name, pglock.DeleteOnRelease)
+	l, err := c.Acquire(name, pglock.DeleteOnRelease())
 	if err != nil {
 		t.Fatal("unexpected error while acquiring lock:", err)
 	}
@@ -256,7 +256,7 @@ func TestLockData(t *testing.T) {
 		t.Log("first lock stored")
 
 		expected := []byte("42")
-		l2, err := c.Acquire(name, pglock.WithData(expected), pglock.ReplaceData)
+		l2, err := c.Acquire(name, pglock.WithData(expected), pglock.ReplaceData())
 		if err != nil {
 			t.Fatal("unexpected error while acquiring lock:", err)
 		}

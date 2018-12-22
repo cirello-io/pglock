@@ -61,8 +61,10 @@ func (l *Lock) IsReleased() bool {
 type Option func(*Lock)
 
 // FailIfLocked will not retry to acquire the lock, instead returning.
-func FailIfLocked(l *Lock) {
-	l.failIfLocked = true
+func FailIfLocked() Option {
+	return func(l *Lock) {
+		l.failIfLocked = true
+	}
 }
 
 // WithData creates lock with data.
@@ -74,11 +76,15 @@ func WithData(data []byte) Option {
 
 // DeleteOnRelease defines whether or not the lock should be deleted
 // when Close() is called on the lock item.
-func DeleteOnRelease(l *Lock) {
-	l.deleteOnRelease = true
+func DeleteOnRelease() Option {
+	return func(l *Lock) {
+		l.deleteOnRelease = true
+	}
 }
 
 // ReplaceData will force the new content to be stored in the lock entry.
-func ReplaceData(l *Lock) {
-	l.replaceData = true
+func ReplaceData() Option {
+	return func(l *Lock) {
+		l.replaceData = true
+	}
 }
