@@ -28,11 +28,20 @@ import (
 	"github.com/lib/pq"
 )
 
-const (
-	defaultTableName          = "locks"
-	defaultLeaseDuration      = 20 * time.Second
-	defaultHeartbeatFrequency = 5 * time.Second
-)
+// DefaultTableName defines the table which the client is going to use to store
+// the content and the metadata of the locks. Use WithCustomTable to modify this
+// value.
+const DefaultTableName = "locks"
+
+// DefaultLeaseDuration is the recommended period of time that a lock can be
+// considered valid before being stolen by another client. Use WithLeaseDuration
+// to modify this value.
+const DefaultLeaseDuration = 20 * time.Second
+
+// DefaultHeartbeatFrequency is the recommended frequency that client should
+// refresh the lock so to avoid other clients from stealing it. Use
+// WithHeartbeatFrequency to modify this value.
+const DefaultHeartbeatFrequency = 5 * time.Second
 
 // ErrNotPostgreSQLDriver is returned when an invalid database connection is
 // passed to this locker client.
@@ -74,9 +83,9 @@ func New(db *sql.DB, opts ...ClientOption) (*Client, error) {
 	}
 	c := &Client{
 		db:                 db,
-		tableName:          defaultTableName,
-		leaseDuration:      defaultLeaseDuration,
-		heartbeatFrequency: defaultHeartbeatFrequency,
+		tableName:          DefaultTableName,
+		leaseDuration:      DefaultLeaseDuration,
+		heartbeatFrequency: DefaultHeartbeatFrequency,
 		log:                log.New(ioutil.Discard, "", 0),
 	}
 	for _, opt := range opts {
