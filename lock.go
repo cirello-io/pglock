@@ -36,7 +36,7 @@ type Lock struct {
 
 	mu                  sync.Mutex
 	isReleased          bool
-	recordVersionNumber string
+	recordVersionNumber int64
 }
 
 // Data returns the content of the lock, if any is available.

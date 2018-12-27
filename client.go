@@ -116,12 +116,21 @@ func (c *Client) newLock(name string, opts []LockOption) *Lock {
 // CreateTable prepares a PostgreSQL table with the right DDL for it to be used
 // by this lock client. If the table already exists, it will return an error.
 func (c *Client) CreateTable() error {
-	_, err := c.db.Exec(`CREATE TABLE ` + c.tableName + ` (
-		name character varying(255) PRIMARY KEY,
-		record_version_number character varying(255),
-		data bytea
-	);`)
-	return errors.E(err, "cannot create the table")
+	cmds := []string{
+		`CREATE TABLE ` + c.tableName + ` (
+			name character varying(255) PRIMARY KEY,
+			record_version_number character varying(255),
+			data bytea
+		);`,
+		`CREATE SEQUENCE ` + c.tableName + `_rvn OWNED BY ` + c.tableName + `.record_version_number`,
+	}
+	for _, cmd := range cmds {
+		_, err := c.db.Exec(cmd)
+		if err != nil {
+			return errors.E(err, "cannot setup the database")
+		}
+	}
+	return nil
 }
 
 // Acquire attempts to grab the lock with the given key name and wait until it
@@ -177,7 +186,10 @@ func (c *Client) storeAcquire(ctx context.Context, l *Lock) error {
 	if err != nil {
 		return typedError(err, "cannot create transaction for lock acquisition")
 	}
-	rvn := randString(32)
+	rvn, err := c.getNextRVN(ctx, tx)
+	if err != nil {
+		return typedError(err, "cannot run query to read record version number")
+	}
 	c.log.Println("storeAcquire in", l.name, rvn, l.data, l.recordVersionNumber)
 	defer func() {
 		c.log.Println("storeAcquire out", l.name, rvn, l.data, l.recordVersionNumber)
@@ -201,10 +213,10 @@ func (c *Client) storeAcquire(ctx context.Context, l *Lock) error {
 	if err != nil {
 		return typedError(err, "cannot run query to acquire lock")
 	}
-	row := tx.QueryRowContext(ctx, `SELECT "record_version_number", "data" FROM `+c.tableName+` WHERE name = $1 FOR UPDATE`, l.name)
-	var actualRVN string
+	rowLockInfo := tx.QueryRowContext(ctx, `SELECT "record_version_number", "data" FROM `+c.tableName+` WHERE name = $1 FOR UPDATE`, l.name)
+	var actualRVN int64
 	var data []byte
-	if err := row.Scan(&actualRVN, &data); err == sql.ErrNoRows {
+	if err := rowLockInfo.Scan(&actualRVN, &data); err == sql.ErrNoRows {
 		return ErrLockNotFound
 	} else if err != nil {
 		return typedError(err, "cannot load information for lock acquisition")
@@ -379,7 +391,10 @@ func (c *Client) storeHeartbeat(ctx context.Context, l *Lock) error {
 	if err != nil {
 		return typedError(err, "cannot create transaction for lock acquisition")
 	}
-	rvn := randString(32)
+	rvn, err := c.getNextRVN(ctx, tx)
+	if err != nil {
+		return typedError(err, "cannot run query to read record version number")
+	}
 	result, err := tx.ExecContext(ctx, `
 		UPDATE
 			`+c.tableName+`
@@ -446,6 +461,13 @@ func (c *Client) getLock(ctx context.Context, name string) ([]byte, error) {
 		return data, ErrLockNotFound
 	}
 	return data, typedError(err, "cannot load the data of this lock")
+}
+
+func (c *Client) getNextRVN(ctx context.Context, tx *sql.Tx) (int64, error) {
+	rowRVN := tx.QueryRowContext(ctx, `SELECT nextval('`+c.tableName+`_rvn')`)
+	var rvn int64
+	err := rowRVN.Scan(&rvn)
+	return rvn, err
 }
 
 // ClientOption reconfigures the lock client
