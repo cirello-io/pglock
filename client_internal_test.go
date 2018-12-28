@@ -35,6 +35,7 @@ func TestTypedError(t *testing.T) {
 		{sql.ErrNoRows, true},
 		{&net.OpError{}, true},
 		{&pq.Error{}, true},
+		{&pq.Error{Code: "40001"}, true},
 	}
 	for _, err := range errs {
 		if err.err == nil {
