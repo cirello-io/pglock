@@ -120,9 +120,9 @@ func (c *Client) newLock(name string, opts []LockOption) *Lock {
 func (c *Client) CreateTable() error {
 	cmds := []string{
 		`CREATE TABLE ` + c.tableName + ` (
-			name character varying(255) PRIMARY KEY,
-			record_version_number character varying(255),
-			data bytea
+			name CHARACTER VARYING(255) PRIMARY KEY,
+			record_version_number BIGINT,
+			data BYTEA
 		);`,
 		`CREATE SEQUENCE ` + c.tableName + `_rvn OWNED BY ` + c.tableName + `.record_version_number`,
 	}
