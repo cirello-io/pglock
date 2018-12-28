@@ -171,12 +171,13 @@ func (c *Client) AcquireContext(ctx context.Context, name string, opts ...LockOp
 
 func (c *Client) tryAcquire(ctx context.Context, l *Lock) error {
 	err := c.storeAcquire(ctx, l)
-	if err == nil {
-		ctx, cancel := context.WithCancel(ctx)
-		l.heartbeatCancel = cancel
-		go c.heartbeat(ctx, l)
+	if err != nil {
+		return err
 	}
-	return err
+	ctx, cancel := context.WithCancel(ctx)
+	l.heartbeatCancel = cancel
+	go c.heartbeat(ctx, l)
+	return nil
 }
 
 func (c *Client) storeAcquire(ctx context.Context, l *Lock) error {
@@ -263,17 +264,17 @@ func (c *Client) Do(ctx context.Context, name string, f func(context.Context, *L
 
 func (c *Client) do(ctx context.Context, l *Lock, f func(context.Context, *Lock) error) error {
 	err := c.storeAcquire(ctx, l)
-	if err == nil {
-		ctx, cancel := context.WithCancel(ctx)
-		defer cancel()
-		l.heartbeatCancel = cancel
-		go func() {
-			defer cancel()
-			c.heartbeat(ctx, l)
-		}()
-		return f(ctx, l)
+	if err != nil {
+		return err
 	}
-	return err
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	l.heartbeatCancel = cancel
+	go func() {
+		defer cancel()
+		c.heartbeat(ctx, l)
+	}()
+	return f(ctx, l)
 }
 
 // Release will update the mutex entry to be able to be taken by other clients.
