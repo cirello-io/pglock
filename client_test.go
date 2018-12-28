@@ -180,31 +180,54 @@ func TestAcquire(t *testing.T) {
 
 func TestGet(t *testing.T) {
 	t.Parallel()
-	db, err := sql.Open("postgres", *dsn)
-	if err != nil {
-		t.Fatal("cannot connect to test database server:", err)
-	}
-	name := randStr(32)
-	c, err := pglock.New(
-		db,
-		pglock.WithLogger(&testLogger{t}),
-	)
-	if err != nil {
-		t.Fatal("cannot create lock client:", err)
-	}
-	expected := []byte("42")
-	l, err := c.Acquire(name, pglock.WithData(expected))
-	if err != nil {
-		t.Fatal("unexpected error while acquiring lock:", err)
-	}
-	defer l.Close()
+	t.Run("happy path", func(t *testing.T) {
+		db, err := sql.Open("postgres", *dsn)
+		if err != nil {
+			t.Fatal("cannot connect to test database server:", err)
+		}
+		name := randStr(32)
+		c, err := pglock.New(
+			db,
+			pglock.WithLogger(&testLogger{t}),
+		)
+		if err != nil {
+			t.Fatal("cannot create lock client:", err)
+		}
+		expected := []byte("42")
+		l, err := c.Acquire(name, pglock.WithData(expected))
+		if err != nil {
+			t.Fatal("unexpected error while acquiring lock:", err)
+		}
+		defer l.Close()
 
-	got, err := c.GetData(name)
-	if err != nil {
-		t.Fatal("cannot load data from the lock entry:", err)
-	} else if !bytes.Equal(got, expected) {
-		t.Fatal("corrupted data load from the lock entry:", got)
-	}
+		got, err := c.GetData(name)
+		if err != nil {
+			t.Fatal("cannot load data from the lock entry:", err)
+		} else if !bytes.Equal(got, expected) {
+			t.Fatal("corrupted data load from the lock entry:", got)
+		}
+	})
+	t.Run("unknown key", func(t *testing.T) {
+		db, err := sql.Open("postgres", *dsn)
+		if err != nil {
+			t.Fatal("cannot connect to test database server:", err)
+		}
+		name := "lock-404"
+		c, err := pglock.New(
+			db,
+			pglock.WithLogger(&testLogger{t}),
+		)
+		if err != nil {
+			t.Fatal("cannot create lock client:", err)
+		}
+		if _, err := c.GetData(name); err == nil {
+			t.Fatal("expected error not found on loading unknown key")
+		} else if !errors.Is(errors.NotExist, err) {
+			t.Fatal("unexpected error kind found on loading unknown key:", err)
+		} else if err != pglock.ErrLockNotFound {
+			t.Fatal("unexpected error found on loading unknown key:", err)
+		}
+	})
 }
 
 func TestLockData(t *testing.T) {
