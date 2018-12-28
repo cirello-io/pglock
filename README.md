@@ -4,6 +4,8 @@
 
 [![Coverage Status](https://coveralls.io/repos/github/ucirello/pglock/badge.svg?branch=master)](https://coveralls.io/github/ucirello/pglock?branch=master)
 
+[![Go Report Card](https://goreportcard.com/badge/github.com/ucirello/pglock)](https://goreportcard.com/report/github.com/ucirello/pglock)
+
 This repository is covered by this [SLA](https://github.com/ucirello/public/blob/master/SLA.md).
 
 The PostgreSQL Lock Client for Go is a general purpose distributed locking
