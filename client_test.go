@@ -493,6 +493,42 @@ func TestDo(t *testing.T) {
 			t.Fatal("unexpected error while running under lock with canceled context:", err)
 		}
 	})
+
+	t.Run("handle failIfLocked", func(t *testing.T) {
+		db, err := sql.Open("postgres", *dsn)
+		if err != nil {
+			t.Fatal("cannot connect to test database server:", err)
+		}
+		name := randStr(32)
+		c, err := pglock.New(
+			db,
+			pglock.WithLogger(&testLogger{t}),
+			pglock.WithLeaseDuration(5*time.Second),
+			pglock.WithHeartbeatFrequency(0),
+		)
+		if err != nil {
+			t.Fatal("cannot create lock client:", err)
+		}
+		if _, err := c.Acquire(name); err != nil {
+			t.Fatal("cannot grab lock:", err)
+		}
+		err = c.Do(context.Background(), name, func(ctx context.Context, l *pglock.Lock) error {
+			return errors.E("should not have been executed")
+		}, pglock.FailIfLocked())
+		if err != pglock.ErrNotAcquired {
+			t.Fatal("unexpected error while running under lock:", err)
+		}
+		err = c.Do(context.Background(), name, func(ctx context.Context, l *pglock.Lock) error {
+			for i := 0; i < 5; i++ {
+				t.Log("i = ", i)
+				time.Sleep(1 * time.Second)
+			}
+			return nil
+		})
+		if err != nil && err != context.Canceled {
+			t.Fatal("unexpected error while running under lock:", err)
+		}
+	})
 }
 
 func releaseLockByName(db *sql.DB, name string) error {
