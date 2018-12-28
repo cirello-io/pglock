@@ -105,9 +105,10 @@ func isDurationTooSmall(c *Client) bool {
 
 func (c *Client) newLock(name string, opts []LockOption) *Lock {
 	l := &Lock{
-		client:        c,
-		name:          name,
-		leaseDuration: c.leaseDuration,
+		client:          c,
+		name:            name,
+		leaseDuration:   c.leaseDuration,
+		heartbeatCancel: func() {},
 	}
 	for _, opt := range opts {
 		opt(l)
