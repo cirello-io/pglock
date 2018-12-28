@@ -217,9 +217,7 @@ func (c *Client) storeAcquire(ctx context.Context, l *Lock) error {
 	rowLockInfo := tx.QueryRowContext(ctx, `SELECT "record_version_number", "data" FROM `+c.tableName+` WHERE name = $1 FOR UPDATE`, l.name)
 	var actualRVN int64
 	var data []byte
-	if err := rowLockInfo.Scan(&actualRVN, &data); err == sql.ErrNoRows {
-		return ErrLockNotFound
-	} else if err != nil {
+	if err := rowLockInfo.Scan(&actualRVN, &data); err != nil {
 		return typedError(err, "cannot load information for lock acquisition")
 	}
 	if actualRVN != rvn {
