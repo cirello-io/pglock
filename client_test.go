@@ -518,6 +518,9 @@ func TestDo(t *testing.T) {
 		if err != pglock.ErrNotAcquired {
 			t.Fatal("unexpected error while running under lock:", err)
 		}
+		if _, err := c.Acquire(name); err != nil {
+			t.Fatal("cannot grab lock:", err)
+		}
 		err = c.Do(context.Background(), name, func(ctx context.Context, l *pglock.Lock) error {
 			for i := 0; i < 5; i++ {
 				t.Log("i = ", i)
