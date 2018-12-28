@@ -53,3 +53,29 @@ func TestTypedError(t *testing.T) {
 		}
 	}
 }
+
+func TestRetry(t *testing.T) {
+	c := &Client{
+		log: &testLogger{t},
+	}
+	errs := []error{
+		errors.E(errors.FailedPrecondition, "failed precondition"),
+		errors.E(errors.Internal, "other error"),
+	}
+	err := c.retry(func() error {
+		var err error
+		err, errs = errs[0], errs[1:]
+		return err
+	})
+	if !errors.Is(errors.Internal, err) {
+		t.Fatal("unexpected error kind found")
+	}
+}
+
+type testLogger struct {
+	t *testing.T
+}
+
+func (t *testLogger) Println(v ...interface{}) {
+	t.t.Log(v...)
+}

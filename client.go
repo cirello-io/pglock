@@ -152,16 +152,13 @@ func (c *Client) AcquireContext(ctx context.Context, name string, opts ...LockOp
 		case <-ctx.Done():
 			return nil, ErrNotAcquired
 		default:
-			err := c.tryAcquire(ctx, l)
+			err := c.retry(func() error { return c.tryAcquire(ctx, l) })
 			if l.failIfLocked && err == ErrNotAcquired {
 				c.log.Println("not acquired, exit")
 				return l, err
 			} else if err == ErrNotAcquired {
 				c.log.Println("not acquired, wait:", l.leaseDuration)
 				time.Sleep(l.leaseDuration)
-				continue
-			} else if errors.Is(errors.FailedPrecondition, err) {
-				c.log.Println("bad transaction, retrying:", err)
 				continue
 			} else if err != nil {
 				c.log.Println("error:", err)
@@ -247,16 +244,13 @@ func (c *Client) Do(ctx context.Context, name string, f func(context.Context, *L
 		case <-ctx.Done():
 			return ErrNotAcquired
 		default:
-			err := c.do(ctx, l, f)
+			err := c.retry(func() error { return c.do(ctx, l, f) })
 			if l.failIfLocked && err == ErrNotAcquired {
 				c.log.Println("not acquired, exit")
 				return err
 			} else if err == ErrNotAcquired {
 				c.log.Println("not acquired, wait:", l.leaseDuration)
 				time.Sleep(l.leaseDuration)
-				continue
-			} else if errors.Is(errors.FailedPrecondition, err) {
-				c.log.Println("bad transaction, retrying:", err)
 				continue
 			} else if err != nil {
 				c.log.Println("error:", err)
@@ -293,14 +287,7 @@ func (c *Client) ReleaseContext(ctx context.Context, l *Lock) error {
 	if l.IsReleased() {
 		return ErrLockAlreadyReleased
 	}
-	for {
-		err := c.storeRelease(ctx, l)
-		if errors.Is(errors.FailedPrecondition, err) {
-			c.log.Println("cannot release lock, trying again:", err)
-			continue
-		}
-		return err
-	}
+	return c.retry(func() error { return c.storeRelease(ctx, l) })
 }
 
 func (c *Client) storeRelease(ctx context.Context, l *Lock) error {
@@ -373,16 +360,8 @@ func (c *Client) heartbeat(ctx context.Context, l *Lock) {
 // SendHeartbeat refreshes the mutex entry so to avoid other clients from
 // grabbing it.
 func (c *Client) SendHeartbeat(ctx context.Context, l *Lock) error {
-	for {
-		err := c.storeHeartbeat(ctx, l)
-		if errors.Is(errors.FailedPrecondition, err) {
-			c.log.Println("SendHeartbeat retry:", l.name, err)
-			continue
-		} else if err != nil {
-			return errors.Wrapf(err, "cannot send heartbeat: %v", l.name)
-		}
-		return nil
-	}
+	err := c.retry(func() error { return c.storeHeartbeat(ctx, l) })
+	return errors.Wrapf(err, "cannot send heartbeat: %v", l.name)
 }
 
 func (c *Client) storeHeartbeat(ctx context.Context, l *Lock) error {
@@ -433,17 +412,16 @@ func (c *Client) GetData(name string) ([]byte, error) {
 // GetDataContext returns the data field from the given lock in the table
 // without holding the lock first.
 func (c *Client) GetDataContext(ctx context.Context, name string) ([]byte, error) {
-	for {
-		data, err := c.getLock(ctx, name)
-		if errors.Is(errors.FailedPrecondition, err) {
-			c.log.Println("cannot get lock entry:", err)
-			continue
-		} else if errors.Is(errors.NotExist, err) {
-			c.log.Println("missing lock entry:", err)
-			return data, err
-		}
-		return data, err
+	var data []byte
+	err := c.retry(func() error {
+		var err error
+		data, err = c.getLock(ctx, name)
+		return err
+	})
+	if errors.Is(errors.NotExist, err) {
+		c.log.Println("missing lock entry:", err)
 	}
+	return data, err
 }
 
 func (c *Client) getLock(ctx context.Context, name string) ([]byte, error) {
@@ -471,6 +449,17 @@ func (c *Client) getNextRVN(ctx context.Context, tx *sql.Tx) (int64, error) {
 	var rvn int64
 	err := rowRVN.Scan(&rvn)
 	return rvn, err
+}
+
+func (c *Client) retry(f func() error) error {
+	for {
+		err := f()
+		if errors.Is(errors.FailedPrecondition, err) {
+			c.log.Println("bad transaction, retrying:", err)
+			continue
+		}
+		return err
+	}
 }
 
 // ClientOption reconfigures the lock client
