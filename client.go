@@ -78,7 +78,9 @@ type Client struct {
 
 // New returns a locker client from the given database connection.
 func New(db *sql.DB, opts ...ClientOption) (*Client, error) {
-	if _, ok := db.Driver().(*pq.Driver); !ok {
+	if db == nil {
+		return nil, ErrNotPostgreSQLDriver
+	} else if _, ok := db.Driver().(*pq.Driver); !ok {
 		return nil, ErrNotPostgreSQLDriver
 	}
 	c := &Client{

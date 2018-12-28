@@ -47,6 +47,22 @@ func init() {
 	_ = c.CreateTable()
 }
 
+func TestNew(t *testing.T) {
+	t.Parallel()
+	if _, err := pglock.New(nil); err == nil {
+		t.Error("bad driver should trigger a pglock.ErrNotPostgreSQLDriver")
+	}
+	// Skipping driver type assertion so to avoid importing another DB
+	// driver just for this particular case.
+	db, err := sql.Open("postgres", *dsn)
+	if err != nil {
+		t.Fatal("cannot connect to test database server:", err)
+	}
+	if _, err := pglock.New(db, pglock.WithLeaseDuration(time.Second), pglock.WithHeartbeatFrequency(time.Second)); err != pglock.ErrDurationTooSmall {
+		t.Fatal("got unexpected error when the client was misconfigured")
+	}
+}
+
 func TestFailIfLocked(t *testing.T) {
 	t.Parallel()
 	db, err := sql.Open("postgres", *dsn)
