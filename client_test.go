@@ -534,6 +534,42 @@ func TestDo(t *testing.T) {
 	})
 }
 
+func TestOwner(t *testing.T) {
+	t.Parallel()
+	db, err := sql.Open("postgres", *dsn)
+	if err != nil {
+		t.Fatal("cannot connect to test database server:", err)
+	}
+	const expectedOwner = "custom-owner"
+	lockName := randStr(32)
+	c, err := pglock.New(
+		db,
+		pglock.WithLogger(&testLogger{t}),
+		pglock.WithLeaseDuration(5*time.Second),
+		pglock.WithHeartbeatFrequency(1*time.Second),
+		pglock.WithOwner(expectedOwner),
+	)
+	if err != nil {
+		t.Fatal("cannot create lock client:", err)
+	}
+	l1, err := c.Acquire(lockName)
+	if err != nil {
+		t.Fatal("unexpected error while acquiring 1st lock:", err)
+	}
+	defer l1.Close()
+	if owner := l1.Owner(); owner != expectedOwner {
+		t.Fatalf("owner not stored in the acquired lock: %s", owner)
+	}
+	row := db.QueryRow("SELECT owner FROM "+pglock.DefaultTableName+" WHERE name = $1", lockName)
+	var foundOwner string
+	if err := row.Scan(&foundOwner); err != nil {
+		t.Fatalf("cannot load owner from the database: %v", err)
+	}
+	if foundOwner != expectedOwner {
+		t.Fatalf("owner not stored in the lock table: %s", foundOwner)
+	}
+}
+
 func releaseLockByName(db *sql.DB, name string) error {
 	const serializationErrorCode = "40001"
 	for {

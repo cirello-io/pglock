@@ -26,6 +26,7 @@ import (
 type Lock struct {
 	client          *Client
 	name            string
+	owner           string
 	heartbeatCancel context.CancelFunc
 	leaseDuration   time.Duration
 
@@ -55,6 +56,13 @@ func (l *Lock) IsReleased() bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	return l.isReleased
+}
+
+// Owner returns who currently owns the lock.
+func (l *Lock) Owner() string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.owner
 }
 
 // LockOption reconfigures how the lock behaves on acquire and release.

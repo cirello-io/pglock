@@ -19,8 +19,10 @@ package pglock
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"io/ioutil"
 	"log"
+	"math/rand"
 	"net"
 	"time"
 
@@ -74,6 +76,7 @@ type Client struct {
 	leaseDuration      time.Duration
 	heartbeatFrequency time.Duration
 	log                Logger
+	owner              string
 }
 
 // New returns a locker client from the given database connection.
@@ -89,6 +92,7 @@ func New(db *sql.DB, opts ...ClientOption) (*Client, error) {
 		leaseDuration:      DefaultLeaseDuration,
 		heartbeatFrequency: DefaultHeartbeatFrequency,
 		log:                log.New(ioutil.Discard, "", 0),
+		owner:              fmt.Sprintf("pglock-%v", rand.Int()),
 	}
 	for _, opt := range opts {
 		opt(c)
@@ -123,7 +127,8 @@ func (c *Client) CreateTable() error {
 		`CREATE TABLE ` + c.tableName + ` (
 			name CHARACTER VARYING(255) PRIMARY KEY,
 			record_version_number BIGINT,
-			data BYTEA
+			data BYTEA,
+			owner CHARACTER VARYING(255)
 		);`,
 		`CREATE SEQUENCE ` + c.tableName + `_rvn OWNED BY ` + c.tableName + `.record_version_number`,
 	}
@@ -197,29 +202,32 @@ func (c *Client) storeAcquire(ctx context.Context, l *Lock) error {
 	}()
 	_, err = tx.ExecContext(ctx, `
 		INSERT INTO `+c.tableName+`
-			("name", "record_version_number", "data")
+			("name", "record_version_number", "data", "owner")
 		VALUES
-			($1, $2, $3)
+			($1, $2, $3, $6)
 		ON CONFLICT ("name") DO UPDATE
 		SET
 			"record_version_number" = $2,
 			"data" = CASE
 				WHEN $5 THEN $3
 				ELSE `+c.tableName+`."data"
-			END
+			END,
+			"owner" = $6
 		WHERE
 			`+c.tableName+`."record_version_number" IS NULL
 			OR `+c.tableName+`."record_version_number" = $4
-	`, l.name, rvn, l.data, l.recordVersionNumber, l.replaceData)
+	`, l.name, rvn, l.data, l.recordVersionNumber, l.replaceData, c.owner)
 	if err != nil {
 		return typedError(err, "cannot run query to acquire lock")
 	}
-	rowLockInfo := tx.QueryRowContext(ctx, `SELECT "record_version_number", "data" FROM `+c.tableName+` WHERE name = $1 FOR UPDATE`, l.name)
+	rowLockInfo := tx.QueryRowContext(ctx, `SELECT "record_version_number", "data", "owner" FROM `+c.tableName+` WHERE name = $1 FOR UPDATE`, l.name)
 	var actualRVN int64
 	var data []byte
-	if err := rowLockInfo.Scan(&actualRVN, &data); err != nil {
+	var actualOwner string
+	if err := rowLockInfo.Scan(&actualRVN, &data, &actualOwner); err != nil {
 		return typedError(err, "cannot load information for lock acquisition")
 	}
+	l.owner = actualOwner
 	if actualRVN != rvn {
 		l.recordVersionNumber = actualRVN
 		return ErrNotAcquired
@@ -485,6 +493,11 @@ func WithHeartbeatFrequency(d time.Duration) ClientOption {
 // name.
 func WithCustomTable(tableName string) ClientOption {
 	return func(c *Client) { c.tableName = tableName }
+}
+
+// WithOwner reconfigures the lock client to use a custom owner name.
+func WithOwner(owner string) ClientOption {
+	return func(c *Client) { c.owner = owner }
 }
 
 func typedError(err error, v ...interface{}) error {
