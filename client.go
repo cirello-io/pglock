@@ -458,15 +458,18 @@ func (c *Client) getNextRVN(ctx context.Context, tx *sql.Tx) (int64, error) {
 	return rvn, err
 }
 
+const maxRetries = 1024
+
 func (c *Client) retry(f func() error) error {
-	for {
-		err := f()
-		if errors.Is(errors.FailedPrecondition, err) {
-			c.log.Println("bad transaction, retrying:", err)
-			continue
+	var err error
+	for i := 0; i < maxRetries; i++ {
+		err = f()
+		if !errors.Is(errors.FailedPrecondition, err) {
+			break
 		}
-		return err
+		c.log.Println("bad transaction, retrying:", err)
 	}
+	return err
 }
 
 // ClientOption reconfigures the lock client

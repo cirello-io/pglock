@@ -19,6 +19,8 @@ package pglock
 import (
 	"database/sql"
 	"fmt"
+	"io/ioutil"
+	"log"
 	"net"
 	"testing"
 
@@ -55,21 +57,40 @@ func TestTypedError(t *testing.T) {
 }
 
 func TestRetry(t *testing.T) {
-	c := &Client{
-		log: &testLogger{t},
-	}
-	errs := []error{
-		errors.E(errors.FailedPrecondition, "failed precondition"),
-		errors.E(errors.Internal, "other error"),
-	}
-	err := c.retry(func() error {
-		var err error
-		err, errs = errs[0], errs[1:]
-		return err
+	t.Run("type check", func(t *testing.T) {
+		c := &Client{
+			log: &testLogger{t},
+		}
+		errs := []error{
+			errors.E(errors.FailedPrecondition, "failed precondition"),
+			errors.E(errors.Internal, "other error"),
+		}
+		err := c.retry(func() error {
+			var err error
+			err, errs = errs[0], errs[1:]
+			return err
+		})
+		if !errors.Is(errors.Internal, err) {
+			t.Fatal("unexpected error kind found")
+		}
 	})
-	if !errors.Is(errors.Internal, err) {
-		t.Fatal("unexpected error kind found")
-	}
+	t.Run("max retries", func(t *testing.T) {
+		c := &Client{
+			log: log.New(ioutil.Discard, "", 0),
+		}
+		var retries int
+		err := c.retry(func() error {
+			retries++
+			return errors.E(errors.FailedPrecondition, "failed precondition")
+		})
+		if !errors.Is(errors.FailedPrecondition, err) {
+			t.Fatal("unexpected error kind found")
+		}
+		if retries != maxRetries {
+			t.Fatal("unexpected retries count found")
+		}
+		t.Log(retries, maxRetries)
+	})
 }
 
 type testLogger struct {
