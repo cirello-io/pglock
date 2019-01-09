@@ -410,45 +410,60 @@ func (c *Client) storeHeartbeat(ctx context.Context, l *Lock) error {
 	return nil
 }
 
-// GetData returns the data field from the given lock in the table
-// without holding the lock first.
+// GetData returns the data field from the given lock in the table without
+// holding the lock first.
 func (c *Client) GetData(name string) ([]byte, error) {
 	return c.GetDataContext(context.Background(), name)
+}
+
+// Get returns the lock object from the given name in the table without holding
+// it first.
+func (c *Client) Get(name string) (*Lock, error) {
+	return c.GetContext(context.Background(), name)
 }
 
 // GetDataContext returns the data field from the given lock in the table
 // without holding the lock first.
 func (c *Client) GetDataContext(ctx context.Context, name string) ([]byte, error) {
-	var data []byte
+	l, err := c.GetContext(ctx, name)
+	return l.Data(), err
+}
+
+// GetContext returns the lock object from the given name in the table without
+// holding it first.
+func (c *Client) GetContext(ctx context.Context, name string) (*Lock, error) {
+	var l *Lock
 	err := c.retry(func() error {
 		var err error
-		data, err = c.getLock(ctx, name)
+		l, err = c.getLock(ctx, name)
 		return err
 	})
 	if errors.Is(errors.NotExist, err) {
 		c.log.Println("missing lock entry:", err)
 	}
-	return data, err
+	return l, err
 }
 
-func (c *Client) getLock(ctx context.Context, name string) ([]byte, error) {
+func (c *Client) getLock(ctx context.Context, name string) (*Lock, error) {
 	ctx, cancel := context.WithTimeout(ctx, c.leaseDuration)
 	defer cancel()
 	row := c.db.QueryRowContext(ctx, `
 		SELECT
-			"data"
+			"name", "owner", "data"
 		FROM
 			`+c.tableName+`
 		WHERE
 			"name" = $1
 		FOR UPDATE
 	`, name)
-	var data []byte
-	err := row.Scan(&data)
+	l := c.newLock(name, nil)
+	l.isReleased = true
+	l.recordVersionNumber = -1
+	err := row.Scan(&l.name, &l.owner, &l.data)
 	if err == sql.ErrNoRows {
-		return data, ErrLockNotFound
+		return l, ErrLockNotFound
 	}
-	return data, typedError(err, "cannot load the data of this lock")
+	return l, typedError(err, "cannot load the data of this lock")
 }
 
 func (c *Client) getNextRVN(ctx context.Context, tx *sql.Tx) (int64, error) {

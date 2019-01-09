@@ -196,7 +196,7 @@ func TestAcquire(t *testing.T) {
 
 func TestGet(t *testing.T) {
 	t.Parallel()
-	t.Run("happy path", func(t *testing.T) {
+	t.Run("happy path - data", func(t *testing.T) {
 		db, err := sql.Open("postgres", *dsn)
 		if err != nil {
 			t.Fatal("cannot connect to test database server:", err)
@@ -223,7 +223,38 @@ func TestGet(t *testing.T) {
 			t.Fatal("corrupted data load from the lock entry:", got)
 		}
 	})
-	t.Run("unknown key", func(t *testing.T) {
+	t.Run("happy path - lock", func(t *testing.T) {
+		db, err := sql.Open("postgres", *dsn)
+		if err != nil {
+			t.Fatal("cannot connect to test database server:", err)
+		}
+		name := randStr(32)
+		const expectedOwner = "custom-owner"
+		c, err := pglock.New(
+			db,
+			pglock.WithLogger(&testLogger{t}),
+			pglock.WithOwner(expectedOwner),
+		)
+		if err != nil {
+			t.Fatal("cannot create lock client:", err)
+		}
+		expectedData := []byte("42")
+		l, err := c.Acquire(name, pglock.WithData(expectedData))
+		if err != nil {
+			t.Fatal("unexpected error while acquiring lock:", err)
+		}
+		defer l.Close()
+
+		got, err := c.Get(name)
+		if err != nil {
+			t.Fatal("cannot load data from the lock entry:", err)
+		} else if gotData := got.Data(); !bytes.Equal(gotData, expectedData) {
+			t.Fatal("corrupted load data from the lock entry:", got)
+		} else if gotOwner := got.Owner(); gotOwner != expectedOwner {
+			t.Fatal("corrupted owner from the lock entry:", got)
+		}
+	})
+	t.Run("unknown key - data", func(t *testing.T) {
 		db, err := sql.Open("postgres", *dsn)
 		if err != nil {
 			t.Fatal("cannot connect to test database server:", err)
