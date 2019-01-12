@@ -1,12 +1,10 @@
 # PostgreSQL Lock Client for Go
 
 [![Build Status](https://travis-ci.org/ucirello/pglock.svg?branch=master)](https://travis-ci.org/ucirello/pglock)
-
 [![Coverage Status](https://coveralls.io/repos/github/ucirello/pglock/badge.svg?branch=master)](https://coveralls.io/github/ucirello/pglock?branch=master)
-
 [![Go Report Card](https://goreportcard.com/badge/github.com/ucirello/pglock)](https://goreportcard.com/report/github.com/ucirello/pglock)
-
-This repository is covered by this [SLA](https://github.com/ucirello/public/blob/master/SLA.md).
+[![Mentioned in Awesome Go](https://awesome.re/mentioned-badge.svg)](https://github.com/avelino/awesome-go)
+[![SLA](https://img.shields.io/badge/SLA-95%25-brightgreen.svg)](https://github.com/ucirello/public/blob/master/SLA.md)
 
 The PostgreSQL Lock Client for Go is a general purpose distributed locking
 library built for PostgreSQL. The PostgreSQL Lock Client for Go supports both
