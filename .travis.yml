@@ -13,6 +13,10 @@ before_install:
 install: true
 
 script:
-  - docker run -d --name pg -p 5433:5432 postgres:9.6
-  - go test -covermode=count -coverprofile=profile.cov -v ./... -dsn=postgres://postgres:mysecretpassword@localhost:5433/postgres?sslmode=disable
+  - docker run -d --name pg -p 5496:5432 postgres:9.6
+  - docker run -d --name pg -p 5410:5432 postgres:10
+  - docker run -d --name pg -p 5411:5432 postgres:11
+  - go test -covermode=count                           -v ./... -dsn=postgres://postgres:mysecretpassword@localhost:5496/postgres?sslmode=disable
+  - go test -covermode=count                           -v ./... -dsn=postgres://postgres:mysecretpassword@localhost:5410/postgres?sslmode=disable
+  - go test -covermode=count -coverprofile=profile.cov -v ./... -dsn=postgres://postgres:mysecretpassword@localhost:5411/postgres?sslmode=disable
   - $GOPATH/bin/goveralls -coverprofile=profile.cov -service=travis-ci
