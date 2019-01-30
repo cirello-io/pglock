@@ -1,11 +1,11 @@
 # PostgreSQL Lock Client for Go
 
 [![GoDoc](https://godoc.org/cirello.io/pglock?status.svg)](https://godoc.org/cirello.io/pglock)
-[![Build Status](https://travis-ci.org/ucirello/pglock.svg?branch=master)](https://travis-ci.org/ucirello/pglock)
-[![Coverage Status](https://coveralls.io/repos/github/ucirello/pglock/badge.svg?branch=master)](https://coveralls.io/github/ucirello/pglock?branch=master)
-[![Go Report Card](https://goreportcard.com/badge/github.com/ucirello/pglock)](https://goreportcard.com/report/github.com/ucirello/pglock)
+[![Build Status](https://travis-ci.org/cirello-io/pglock.svg?branch=master)](https://travis-ci.org/cirello-io/pglock)
+[![Coverage Status](https://coveralls.io/repos/github/cirello-io/pglock/badge.svg?branch=master)](https://coveralls.io/github/cirello-io/pglock?branch=master)
+[![Go Report Card](https://goreportcard.com/badge/github.com/cirello-io/pglock)](https://goreportcard.com/report/github.com/cirello-io/pglock)
 [![Mentioned in Awesome Go](https://awesome.re/mentioned-badge.svg)](https://github.com/avelino/awesome-go)
-[![SLA](https://img.shields.io/badge/SLA-95%25-brightgreen.svg)](https://github.com/ucirello/public/blob/master/SLA.md)
+[![SLA](https://img.shields.io/badge/SLA-95%25-brightgreen.svg)](https://github.com/cirello-io/public/blob/master/SLA.md)
 
 The PostgreSQL Lock Client for Go is a general purpose distributed locking
 library built for PostgreSQL. The PostgreSQL Lock Client for Go supports both
