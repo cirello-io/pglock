@@ -26,8 +26,8 @@ import (
 	"net"
 	"time"
 
-	"cirello.io/errors"
 	"github.com/lib/pq"
+	"golang.org/x/xerrors"
 )
 
 // DefaultTableName defines the table which the client is going to use to store
@@ -44,28 +44,6 @@ const DefaultLeaseDuration = 20 * time.Second
 // refresh the lock so to avoid other clients from stealing it. Use
 // WithHeartbeatFrequency to modify this value.
 const DefaultHeartbeatFrequency = 5 * time.Second
-
-// ErrNotPostgreSQLDriver is returned when an invalid database connection is
-// passed to this locker client.
-var ErrNotPostgreSQLDriver = errors.E("this is not a PostgreSQL connection")
-
-// ErrNotAcquired indicates the given lock is already enforce to some other
-// client.
-var ErrNotAcquired = errors.E("cannot acquire lock")
-
-// ErrLockAlreadyReleased indicates that a release call cannot be fulfilled
-// because the client does not hold the lock
-var ErrLockAlreadyReleased = errors.E("lock is already released")
-
-// ErrLockNotFound is returned for get calls on missing lock entries.
-var ErrLockNotFound = errors.E(errors.NotExist, "lock not found")
-
-// Validation errors
-var (
-	ErrDurationTooSmall = errors.E("Heartbeat period must be no more than half the length of the Lease Duration, " +
-		"or locks might expire due to the heartbeat thread taking too long to update them (recommendation is to make it much greater, for example " +
-		"4+ times greater)")
-)
 
 // Client is the PostgreSQL's backed distributed lock. Make sure it is always
 // configured to talk to leaders and not followers in the case of replicated
@@ -135,7 +113,7 @@ func (c *Client) CreateTable() error {
 	for _, cmd := range cmds {
 		_, err := c.db.Exec(cmd)
 		if err != nil {
-			return errors.E(err, "cannot setup the database")
+			return xerrors.Errorf("cannot setup the database: %w", err)
 		}
 	}
 	return nil
@@ -368,7 +346,7 @@ func (c *Client) heartbeat(ctx context.Context, l *Lock) {
 // grabbing it.
 func (c *Client) SendHeartbeat(ctx context.Context, l *Lock) error {
 	err := c.retry(func() error { return c.storeHeartbeat(ctx, l) })
-	return errors.Wrapf(err, "cannot send heartbeat: %v", l.name)
+	return xerrors.Errorf("cannot send heartbeat (%v): %w", l.name, err)
 }
 
 func (c *Client) storeHeartbeat(ctx context.Context, l *Lock) error {
@@ -438,7 +416,7 @@ func (c *Client) GetContext(ctx context.Context, name string) (*Lock, error) {
 		l, err = c.getLock(ctx, name)
 		return err
 	})
-	if errors.Is(errors.NotExist, err) {
+	if notExist := (&NotExistError{}); err != nil && xerrors.As(err, &notExist) {
 		c.log.Println("missing lock entry:", err)
 	}
 	return l, err
@@ -479,7 +457,7 @@ func (c *Client) retry(f func() error) error {
 	var err error
 	for i := 0; i < maxRetries; i++ {
 		err = f()
-		if !errors.Is(errors.FailedPrecondition, err) {
+		if failedPrecondition := (&FailedPreconditionError{}); err == nil || !xerrors.As(err, &failedPrecondition) {
 			break
 		}
 		c.log.Println("bad transaction, retrying:", err)
@@ -518,21 +496,16 @@ func WithOwner(owner string) ClientOption {
 	return func(c *Client) { c.owner = owner }
 }
 
-func typedError(err error, v ...interface{}) error {
+func typedError(err error, msg string) error {
 	const serializationErrorCode = "40001"
 	if err == nil {
 		return nil
 	} else if err == sql.ErrNoRows {
-		args := append([]interface{}{errors.NotExist, err}, v...)
-		return errors.E(args...)
+		return &NotExistError{xerrors.Errorf(msg+": %w", err)}
 	} else if _, ok := err.(*net.OpError); ok {
-		args := append([]interface{}{errors.Unavailable, err}, v...)
-		return errors.E(args...)
-	} else if e, ok := err.(*pq.Error); ok {
-		if e.Code == serializationErrorCode {
-			args := append([]interface{}{errors.FailedPrecondition, err}, v...)
-			return errors.E(args...)
-		}
+		return &UnavailableError{xerrors.Errorf(msg+": %w", err)}
+	} else if e, ok := err.(*pq.Error); ok && e.Code == serializationErrorCode {
+		return &FailedPreconditionError{xerrors.Errorf(msg+": %w", err)}
 	}
-	return err
+	return &OtherError{err}
 }

@@ -1,4 +1,4 @@
-cirello.io/errors v0.0.0-20181205161645-4324868870b3 h1:mImioqzHtPJmWRXmKPWn0I0mX2hWH7/G+bVWjTr77FM=
-cirello.io/errors v0.0.0-20181205161645-4324868870b3/go.mod h1:EGeXTbC2JZmq7lFJ3wJXj2Nw1q6oLd7VHbznWcBrN2E=
 github.com/lib/pq v1.0.0 h1:X5PMW56eZitiTeO7tKzZxFCSpbFZJtkMMooicw2us9A=
 github.com/lib/pq v1.0.0/go.mod h1:5WUZQaWbwv1U+lTReE5YruASi9Al49XbQIvNi/34Woo=
+golang.org/x/xerrors v0.0.0-20190212162355-a5947ffaace3 h1:P6iTFmrTQqWrqLZPX1VMzCUbCRCAUXSUsSpkEOvWzJ0=
+golang.org/x/xerrors v0.0.0-20190212162355-a5947ffaace3/go.mod h1:I/5z698sn9Ka8TeJc9MKroUUfqBBauWjQqLJ2OPfmY0=

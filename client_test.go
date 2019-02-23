@@ -27,9 +27,9 @@ import (
 	"testing"
 	"time"
 
-	"cirello.io/errors"
 	"cirello.io/pglock"
 	"github.com/lib/pq"
+	"golang.org/x/xerrors"
 )
 
 var dsn = flag.String("dsn", "postgres://postgres@localhost/postgres?sslmode=disable", "connection string to the test database server")
@@ -269,7 +269,7 @@ func TestGet(t *testing.T) {
 		}
 		if _, err := c.GetData(name); err == nil {
 			t.Fatal("expected error not found on loading unknown key")
-		} else if !errors.Is(errors.NotExist, err) {
+		} else if notFound := (&pglock.NotExistError{}); !xerrors.As(err, &notFound) {
 			t.Fatal("unexpected error kind found on loading unknown key:", err)
 		} else if err != pglock.ErrLockNotFound {
 			t.Fatal("unexpected error found on loading unknown key:", err)
@@ -468,7 +468,7 @@ func TestDo(t *testing.T) {
 		<-ranOnce
 		t.Log("directly releasing lock")
 		if err := releaseLockByName(db, name); err != nil {
-			t.Fatal("cannot forcefully release lock")
+			t.Fatalf("cannot forcefully release lock: %v", err)
 		}
 		wg.Wait()
 	})
@@ -544,7 +544,7 @@ func TestDo(t *testing.T) {
 			t.Fatal("cannot grab lock:", err)
 		}
 		err = c.Do(context.Background(), name, func(ctx context.Context, l *pglock.Lock) error {
-			return errors.E("should not have been executed")
+			return xerrors.New("should not have been executed")
 		}, pglock.FailIfLocked())
 		if err != pglock.ErrNotAcquired {
 			t.Fatal("unexpected error while running under lock:", err)
@@ -610,7 +610,10 @@ func releaseLockByName(db *sql.DB, name string) error {
 				continue
 			}
 		}
-		return errors.E(err, "cannot release lock by name")
+		if err != nil {
+			return xerrors.Errorf("cannot release lock by name: %v", err)
+		}
+		return nil
 	}
 }
 
