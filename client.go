@@ -58,17 +58,28 @@ type Client struct {
 	owner              string
 }
 
-// New returns a locker client from the given database connection.
-func New(dsn string, opts ...ClientOption) (_ *Client, err error) {
+// Open returns a locker client from the given postgresql data source name. In
+// this mode, it uses postgresql's LISTEN/NOTIFY to easen the transaction
+// retries.
+func Open(dsn string, opts ...ClientOption) (_ *Client, err error) {
 	db, err := sql.Open("postgres", dsn)
 	if err != nil {
 		return nil, xerrors.Errorf("cannot connect to postgresql instance: %w", err)
+	}
+	opts = append(opts, withDSN(dsn))
+	return New(db, opts...)
+}
+
+// New returns a locker client from the given database connection. In this mode,
+// it does not use postgresql's LISTEN/NOTIFY to easen the transaction retries.
+func New(db *sql.DB, opts ...ClientOption) (_ *Client, err error) {
+	if db == nil {
+		return nil, ErrNotPostgreSQLDriver
 	} else if _, ok := db.Driver().(*pq.Driver); !ok {
 		return nil, ErrNotPostgreSQLDriver
 	}
 	c := &Client{
 		db:                 db,
-		dsn:                dsn,
 		tableName:          DefaultTableName,
 		leaseDuration:      DefaultLeaseDuration,
 		heartbeatFrequency: DefaultHeartbeatFrequency,
@@ -459,12 +470,12 @@ func (c *Client) getNextRVN(ctx context.Context, tx *sql.Tx) (int64, error) {
 	return rvn, err
 }
 
-const maxRetries = 1024
-
 func (c *Client) notify() {
 	_, err := c.db.Exec(fmt.Sprintf("NOTIFY pglock, '%s'", time.Now()))
 	c.log.Println("notification sent:", err)
 }
+
+const maxRetries = 1024
 
 func (c *Client) retry(f func() error) error {
 	var err error
@@ -493,7 +504,7 @@ func (c *Client) subscribeNotifications() (*pq.Listener, func() error) {
 		Notify: notifications,
 	}
 	listenerCloser := func() error { return nil }
-	if c.db != nil {
+	if c.db != nil && c.dsn != "" {
 		const (
 			minListenReconnectInterval = 100 * time.Millisecond
 			maxListenReconnectInterval = 1 * time.Second
@@ -537,6 +548,10 @@ func WithCustomTable(tableName string) ClientOption {
 // WithOwner reconfigures the lock client to use a custom owner name.
 func WithOwner(owner string) ClientOption {
 	return func(c *Client) { c.owner = owner }
+}
+
+func withDSN(dsn string) ClientOption {
+	return func(c *Client) { c.dsn = dsn }
 }
 
 func typedError(err error, msg string) error {
