@@ -50,7 +50,7 @@ const DefaultHeartbeatFrequency = 5 * time.Second
 // setups.
 type Client struct {
 	db                 *sql.DB
-	dbListen           *pq.Listener
+	dsn                string
 	tableName          string
 	leaseDuration      time.Duration
 	heartbeatFrequency time.Duration
@@ -66,35 +66,9 @@ func New(dsn string, opts ...ClientOption) (_ *Client, err error) {
 	} else if _, ok := db.Driver().(*pq.Driver); !ok {
 		return nil, ErrNotPostgreSQLDriver
 	}
-	const (
-		minListenReconnectInterval = 1 * time.Second
-		maxListenReconnectInterval = 5 * time.Second
-	)
-	dbListenStatus := make(chan pq.ListenerEventType)
-	dbListen := pq.NewListener(dsn, minListenReconnectInterval, maxListenReconnectInterval,
-		func(ev pq.ListenerEventType, eventErr error) {
-			err = eventErr
-			dbListenStatus <- ev
-		},
-	)
-	select {
-	case <-time.After(5 * time.Second):
-		return nil, xerrors.Errorf("cannot start notification listener (timeout): %w", err)
-	case <-dbListenStatus:
-	}
-	if err != nil {
-		db.Close()
-		dbListen.Close()
-		return nil, xerrors.Errorf("cannot start notification listener: %w", err)
-	}
-	if err := dbListen.Listen("pglock"); err != nil {
-		db.Close()
-		dbListen.Close()
-		return nil, xerrors.Errorf("cannot subscribe to pglock listener: %w", err)
-	}
 	c := &Client{
 		db:                 db,
-		dbListen:           dbListen,
+		dsn:                dsn,
 		tableName:          DefaultTableName,
 		leaseDuration:      DefaultLeaseDuration,
 		heartbeatFrequency: DefaultHeartbeatFrequency,
@@ -106,7 +80,6 @@ func New(dsn string, opts ...ClientOption) (_ *Client, err error) {
 	}
 	if isDurationTooSmall(c) {
 		db.Close()
-		dbListen.Close()
 		return nil, ErrDurationTooSmall
 	}
 	return c, nil
@@ -495,6 +468,8 @@ func (c *Client) notify() {
 
 func (c *Client) retry(f func() error) error {
 	var err error
+	listener, listenerCloser := c.subscribeNotifications()
+	defer listenerCloser()
 	for i := 0; i < maxRetries; i++ {
 		err = f()
 		if failedPrecondition := (&FailedPreconditionError{}); err == nil || !xerrors.As(err, &failedPrecondition) {
@@ -502,12 +477,35 @@ func (c *Client) retry(f func() error) error {
 		}
 		c.log.Println("bad transaction, retrying:", err)
 		select {
-		case <-c.dbListen.NotificationChannel():
+		case <-listener.NotificationChannel():
 			c.log.Println("reacted to notification")
 		case <-time.After(c.leaseDuration):
+			c.log.Println("reacted to leaseDuration")
 		}
 	}
 	return err
+}
+
+func (c *Client) subscribeNotifications() (*pq.Listener, func() error) {
+	notifications := make(chan *pq.Notification)
+	close(notifications)
+	listener := &pq.Listener{
+		Notify: notifications,
+	}
+	listenerCloser := func() error { return nil }
+	if c.db != nil {
+		const (
+			minListenReconnectInterval = 100 * time.Millisecond
+			maxListenReconnectInterval = 1 * time.Second
+		)
+		listener = pq.NewListener(c.dsn, minListenReconnectInterval, maxListenReconnectInterval, func(pq.ListenerEventType, error) {})
+		if err := listener.Listen("pglock"); err != nil {
+			c.log.Println("cannot subscribe to pglock listener:", err)
+
+		}
+		listenerCloser = listener.Close
+	}
+	return listener, listenerCloser
 }
 
 // ClientOption reconfigures the lock client

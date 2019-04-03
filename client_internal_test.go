@@ -52,11 +52,8 @@ func TestTypedError(t *testing.T) {
 
 func TestRetry(t *testing.T) {
 	t.Run("type check", func(t *testing.T) {
-		notifications := make(chan *pq.Notification)
-		close(notifications)
 		c := &Client{
-			log:      &testLogger{t},
-			dbListen: &pq.Listener{Notify: notifications},
+			log: &testLogger{t},
 		}
 		errs := []error{
 			&FailedPreconditionError{xerrors.New("failed precondition")},
@@ -72,11 +69,8 @@ func TestRetry(t *testing.T) {
 		}
 	})
 	t.Run("max retries", func(t *testing.T) {
-		notifications := make(chan *pq.Notification)
-		close(notifications)
 		c := &Client{
-			log:      log.New(ioutil.Discard, "", 0),
-			dbListen: &pq.Listener{Notify: notifications},
+			log: log.New(ioutil.Discard, "", 0),
 		}
 		var retries int
 		err := c.retry(func() error {
