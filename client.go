@@ -50,6 +50,7 @@ const DefaultHeartbeatFrequency = 5 * time.Second
 // setups.
 type Client struct {
 	db                 *sql.DB
+	dbListen           *pq.Listener
 	tableName          string
 	leaseDuration      time.Duration
 	heartbeatFrequency time.Duration
@@ -58,14 +59,42 @@ type Client struct {
 }
 
 // New returns a locker client from the given database connection.
-func New(db *sql.DB, opts ...ClientOption) (*Client, error) {
-	if db == nil {
-		return nil, ErrNotPostgreSQLDriver
+func New(dsn string, opts ...ClientOption) (_ *Client, err error) {
+	db, err := sql.Open("postgres", dsn)
+	if err != nil {
+		return nil, xerrors.Errorf("cannot connect to postgresql instance: %w", err)
 	} else if _, ok := db.Driver().(*pq.Driver); !ok {
 		return nil, ErrNotPostgreSQLDriver
 	}
+	const (
+		minListenReconnectInterval = 1 * time.Second
+		maxListenReconnectInterval = 5 * time.Second
+	)
+	dbListenStatus := make(chan pq.ListenerEventType)
+	dbListen := pq.NewListener(dsn, minListenReconnectInterval, maxListenReconnectInterval,
+		func(ev pq.ListenerEventType, eventErr error) {
+			err = eventErr
+			dbListenStatus <- ev
+		},
+	)
+	select {
+	case <-time.After(5 * time.Second):
+		return nil, xerrors.Errorf("cannot start notification listener (timeout): %w", err)
+	case <-dbListenStatus:
+	}
+	if err != nil {
+		db.Close()
+		dbListen.Close()
+		return nil, xerrors.Errorf("cannot start notification listener: %w", err)
+	}
+	if err := dbListen.Listen("pglock"); err != nil {
+		db.Close()
+		dbListen.Close()
+		return nil, xerrors.Errorf("cannot subscribe to pglock listener: %w", err)
+	}
 	c := &Client{
 		db:                 db,
+		dbListen:           dbListen,
 		tableName:          DefaultTableName,
 		leaseDuration:      DefaultLeaseDuration,
 		heartbeatFrequency: DefaultHeartbeatFrequency,
@@ -76,6 +105,8 @@ func New(db *sql.DB, opts ...ClientOption) (*Client, error) {
 		opt(c)
 	}
 	if isDurationTooSmall(c) {
+		db.Close()
+		dbListen.Close()
 		return nil, ErrDurationTooSmall
 	}
 	return c, nil
@@ -157,6 +188,7 @@ func (c *Client) tryAcquire(ctx context.Context, l *Lock) error {
 	if err != nil {
 		return err
 	}
+	c.notify()
 	ctx, cancel := context.WithCancel(ctx)
 	l.heartbeatCancel = cancel
 	go c.heartbeat(ctx, l)
@@ -251,6 +283,7 @@ func (c *Client) do(ctx context.Context, l *Lock, f func(context.Context, *Lock)
 	if err != nil {
 		return err
 	}
+	c.notify()
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	l.heartbeatCancel = cancel
@@ -320,6 +353,7 @@ func (c *Client) storeRelease(ctx context.Context, l *Lock) error {
 	}
 	l.isReleased = true
 	l.heartbeatCancel()
+	c.notify()
 	return nil
 }
 
@@ -385,6 +419,7 @@ func (c *Client) storeHeartbeat(ctx context.Context, l *Lock) error {
 		return typedError(err, "cannot commit lock heartbeat")
 	}
 	l.recordVersionNumber = rvn
+	c.notify()
 	return nil
 }
 
@@ -453,6 +488,11 @@ func (c *Client) getNextRVN(ctx context.Context, tx *sql.Tx) (int64, error) {
 
 const maxRetries = 1024
 
+func (c *Client) notify() {
+	_, err := c.db.Exec(fmt.Sprintf("NOTIFY pglock, '%s'", time.Now()))
+	c.log.Println("notification sent:", err)
+}
+
 func (c *Client) retry(f func() error) error {
 	var err error
 	for i := 0; i < maxRetries; i++ {
@@ -461,6 +501,11 @@ func (c *Client) retry(f func() error) error {
 			break
 		}
 		c.log.Println("bad transaction, retrying:", err)
+		select {
+		case <-c.dbListen.NotificationChannel():
+			c.log.Println("reacted to notification")
+		case <-time.After(c.leaseDuration):
+		}
 	}
 	return err
 }
