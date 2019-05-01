@@ -364,7 +364,10 @@ func (c *Client) heartbeat(ctx context.Context, l *Lock) {
 // grabbing it.
 func (c *Client) SendHeartbeat(ctx context.Context, l *Lock) error {
 	err := c.retry(func() error { return c.storeHeartbeat(ctx, l) })
-	return xerrors.Errorf("cannot send heartbeat (%v): %w", l.name, err)
+	if err != nil {
+		return xerrors.Errorf("cannot send heartbeat (%v): %w", l.name, err)
+	}
+	return nil
 }
 
 func (c *Client) storeHeartbeat(ctx context.Context, l *Lock) error {
