@@ -588,3 +588,61 @@ type testLogger struct {
 func (t *testLogger) Println(v ...interface{}) {
 	t.t.Log(v...)
 }
+
+func TestSendHeartbeat(t *testing.T) {
+	t.Run("bad sendHeartbeat", func(t *testing.T) {
+		db, err := sql.Open("postgres", *dsn)
+		if err != nil {
+			t.Fatal("cannot connect to test database server:", err)
+		}
+		c, err := pglock.New(
+			db,
+			pglock.WithLogger(&testLogger{t}),
+			pglock.WithLeaseDuration(5*time.Second),
+			pglock.WithHeartbeatFrequency(0),
+		)
+		if err != nil {
+			t.Fatal("cannot create lock client:", err)
+		}
+		name := randStr(32)
+		l, err := c.Acquire(name)
+		if err != nil {
+			t.Fatal("unexpected error while acquiring lock:", err)
+		}
+		if err := c.Release(l); err != nil {
+			t.Fatal("unexpected error while releasing lock:", err)
+		}
+		err = c.SendHeartbeat(context.Background(), l)
+		if err == nil {
+			t.Error("sendHeartbeat error missing")
+		}
+		t.Log(err)
+	})
+	t.Run("good sendHeartbeat", func(t *testing.T) {
+		db, err := sql.Open("postgres", *dsn)
+		if err != nil {
+			t.Fatal("cannot connect to test database server:", err)
+		}
+		c, err := pglock.New(
+			db,
+			pglock.WithLogger(&testLogger{t}),
+			pglock.WithLeaseDuration(5*time.Second),
+			pglock.WithHeartbeatFrequency(0),
+		)
+		if err != nil {
+			t.Fatal("cannot create lock client:", err)
+		}
+		name := randStr(32)
+		l, err := c.Acquire(name)
+		if err != nil {
+			t.Fatal("unexpected error while acquiring lock:", err)
+		}
+		err = c.SendHeartbeat(context.Background(), l)
+		if err != nil {
+			t.Errorf("sendHeartbeat failed: %v", err)
+		}
+		if err := c.Release(l); err != nil {
+			t.Fatal("unexpected error while releasing lock:", err)
+		}
+	})
+}
