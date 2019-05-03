@@ -2,7 +2,7 @@ language: go
 sudo: required
 go_import_path: cirello.io/pglock
 go:
-  - "1.11"
+  - "1.12.4"
 
 services:
   - docker
