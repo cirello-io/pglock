@@ -515,7 +515,6 @@ func (c *Client) subscribeNotifications() (*pq.Listener, func() error) {
 		listener = pq.NewListener(c.dsn, minListenReconnectInterval, maxListenReconnectInterval, func(pq.ListenerEventType, error) {})
 		if err := listener.Listen("pglock"); err != nil {
 			c.log.Println("cannot subscribe to pglock listener:", err)
-
 		}
 		listenerCloser = listener.Close
 	}
