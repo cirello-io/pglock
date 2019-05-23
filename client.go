@@ -19,6 +19,7 @@ package pglock
 import (
 	"context"
 	"database/sql"
+	"database/sql/driver"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -62,12 +63,23 @@ type Client struct {
 // this mode, it uses postgresql's LISTEN/NOTIFY to easen the transaction
 // retries.
 func Open(dsn string, opts ...ClientOption) (_ *Client, err error) {
-	db, err := sql.Open("postgres", dsn)
-	if err != nil {
-		return nil, xerrors.Errorf("cannot connect to postgresql instance: %w", err)
-	}
+	var driveri driver.Driver = &pq.Driver{}
+	db := sql.OpenDB(dsnConnector{dsn: dsn, driver: driveri})
 	opts = append(opts, withDSN(dsn))
 	return New(db, opts...)
+}
+
+type dsnConnector struct {
+	dsn    string
+	driver driver.Driver
+}
+
+func (t dsnConnector) Connect(_ context.Context) (driver.Conn, error) {
+	return t.driver.Open(t.dsn)
+}
+
+func (t dsnConnector) Driver() driver.Driver {
+	return t.driver
 }
 
 // New returns a locker client from the given database connection. In this mode,

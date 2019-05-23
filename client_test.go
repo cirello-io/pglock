@@ -82,9 +82,11 @@ func TestNew(t *testing.T) {
 
 func TestOpen(t *testing.T) {
 	t.Parallel()
-	if _, err := pglock.Open(*dsn, pglock.WithLeaseDuration(time.Second), pglock.WithHeartbeatFrequency(time.Second)); err != pglock.ErrDurationTooSmall {
-		t.Fatal("got unexpected error when the client was misconfigured")
-	}
+	t.Run("good dsn", func(t *testing.T) {
+		if _, err := pglock.Open(*dsn, pglock.WithLeaseDuration(time.Second), pglock.WithHeartbeatFrequency(time.Second)); err != pglock.ErrDurationTooSmall {
+			t.Fatal("got unexpected error when the client was misconfigured")
+		}
+	})
 }
 
 func TestFailIfLocked(t *testing.T) {
