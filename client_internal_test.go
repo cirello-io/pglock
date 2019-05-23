@@ -98,17 +98,17 @@ func (t *testLogger) Println(v ...interface{}) {
 }
 
 func TestDBErrorHandling(t *testing.T) {
-	db, err := sql.Open("postgres", "")
-	if err != nil {
-		t.Fatal("cannot connect to test database server:", err)
-	}
-	client, _ := New(db)
-	db, mock, err := sqlmock.New()
-	if err != nil {
-		t.Fatal("cannot create mock:", err)
-	}
-	client.db = db
 	t.Run("bad tx - acquire", func(t *testing.T) {
+		db, err := sql.Open("postgres", "")
+		if err != nil {
+			t.Fatal("cannot connect to test database server:", err)
+		}
+		client, _ := New(db)
+		db, mock, err := sqlmock.New()
+		if err != nil {
+			t.Fatal("cannot create mock:", err)
+		}
+		client.db = db
 		badTx := errors.New("transaction begin error")
 		mock.ExpectBegin().WillReturnError(badTx)
 		_, err = client.Acquire("bad-tx")
