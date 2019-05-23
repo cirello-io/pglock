@@ -1,3 +1,5 @@
+# github.com/DATA-DOG/go-sqlmock v1.3.3
+github.com/DATA-DOG/go-sqlmock
 # github.com/lib/pq v1.0.0
 github.com/lib/pq
 github.com/lib/pq/oid

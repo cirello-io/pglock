@@ -18,12 +18,14 @@ package pglock
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"net"
 	"testing"
 
+	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/lib/pq"
 	"golang.org/x/xerrors"
 )
@@ -93,4 +95,25 @@ type testLogger struct {
 
 func (t *testLogger) Println(v ...interface{}) {
 	t.t.Log(v...)
+}
+
+func TestDBErrorHandling(t *testing.T) {
+	db, err := sql.Open("postgres", "")
+	if err != nil {
+		t.Fatal("cannot connect to test database server:", err)
+	}
+	client, _ := New(db)
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal("cannot create mock:", err)
+	}
+	client.db = db
+	t.Run("bad tx - acquire", func(t *testing.T) {
+		badTx := errors.New("transaction begin error")
+		mock.ExpectBegin().WillReturnError(badTx)
+		_, err = client.Acquire("bad-tx")
+		if err != badTx {
+			t.Errorf("expected tx missing: %v", err)
+		}
+	})
 }
