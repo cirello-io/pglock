@@ -18,7 +18,6 @@ package pglock
 
 import (
 	"database/sql"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -109,10 +108,10 @@ func TestDBErrorHandling(t *testing.T) {
 			t.Fatal("cannot create mock:", err)
 		}
 		client.db = db
-		badTx := errors.New("transaction begin error")
+		badTx := xerrors.New("transaction begin error")
 		mock.ExpectBegin().WillReturnError(badTx)
 		_, err = client.Acquire("bad-tx")
-		if err != badTx {
+		if !xerrors.Is(err, badTx) {
 			t.Errorf("expected tx missing: %v", err)
 		}
 	})
