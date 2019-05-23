@@ -51,8 +51,10 @@ func Is(err, target error) bool {
 	if target == nil {
 		return err == target
 	}
+
+	isComparable := reflect.TypeOf(target).Comparable()
 	for {
-		if err == target {
+		if isComparable && err == target {
 			return true
 		}
 		if x, ok := err.(interface{ Is(error) bool }); ok && x.Is(target) {
@@ -88,7 +90,7 @@ func As(err error, target interface{}) bool {
 		panic("errors: *target must be interface or implement error")
 	}
 	targetType := typ.Elem()
-	for {
+	for err != nil {
 		if reflect.TypeOf(err).AssignableTo(targetType) {
 			val.Elem().Set(reflect.ValueOf(err))
 			return true
@@ -96,10 +98,9 @@ func As(err error, target interface{}) bool {
 		if x, ok := err.(interface{ As(interface{}) bool }); ok && x.As(target) {
 			return true
 		}
-		if err = Unwrap(err); err == nil {
-			return false
-		}
+		err = Unwrap(err)
 	}
+	return false
 }
 
 var errorType = reflect.TypeOf((*error)(nil)).Elem()
