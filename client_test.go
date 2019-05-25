@@ -22,6 +22,7 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"flag"
+	"log"
 	"math/rand"
 	"sync"
 	"testing"
@@ -42,6 +43,15 @@ var dsn = flag.String("dsn", "postgres://postgres@localhost/postgres?sslmode=dis
 
 func init() {
 	flag.Parse()
+	db, err := sql.Open("postgres", *dsn)
+	if err != nil {
+		log.Fatal("cannot connect to test database server:", err)
+	}
+	c, err := pglock.New(db)
+	if err != nil {
+		log.Fatal(err)
+	}
+	_ = c.CreateTable()
 }
 
 func setupDB(t *testing.T) *sql.DB {
