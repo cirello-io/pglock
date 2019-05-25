@@ -672,10 +672,12 @@ func TestSendHeartbeat(t *testing.T) {
 		if err != nil {
 			t.Fatal("unexpected error while acquiring lock:", err)
 		}
+		t.Log("RVN:", l.RecordVersionNumber())
 		err = c.SendHeartbeat(context.Background(), l)
 		if err != nil {
 			t.Errorf("sendHeartbeat failed: %v", err)
 		}
+		t.Log("RVN:", l.RecordVersionNumber())
 		if err := c.Release(l); err != nil {
 			t.Fatal("unexpected error while releasing lock:", err)
 		}

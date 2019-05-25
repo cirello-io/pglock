@@ -65,6 +65,16 @@ func (l *Lock) Owner() string {
 	return l.owner
 }
 
+// RecordVersionNumber is the expectation that this lock entry has about its
+// consistency in the database. If the RecordVersionNumber from the database
+// mismatches the one in the lock, it means that some clock drift has taken
+// place and this lock is no longer valid.
+func (l *Lock) RecordVersionNumber() int64 {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.recordVersionNumber
+}
+
 // LockOption reconfigures how the lock behaves on acquire and release.
 type LockOption func(*Lock)
 
