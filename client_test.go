@@ -22,7 +22,6 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"flag"
-	"log"
 	"math/rand"
 	"sync"
 	"testing"
@@ -43,11 +42,14 @@ var dsn = flag.String("dsn", "postgres://postgres@localhost/postgres?sslmode=dis
 
 func init() {
 	flag.Parse()
-	c, err := pglock.Open(*dsn)
+}
+
+func setupDB(t *testing.T) *sql.DB {
+	db, err := sql.Open("postgres", *dsn)
 	if err != nil {
-		log.Fatal(err)
+		t.Fatal("cannot connect to test database server:", err)
 	}
-	_ = c.CreateTable()
+	return db
 }
 
 func TestNew(t *testing.T) {
@@ -83,7 +85,7 @@ func TestNew(t *testing.T) {
 func TestOpen(t *testing.T) {
 	t.Parallel()
 	t.Run("good dsn", func(t *testing.T) {
-		if _, err := pglock.Open(*dsn, pglock.WithLeaseDuration(time.Second), pglock.WithHeartbeatFrequency(time.Second)); err != pglock.ErrDurationTooSmall {
+		if _, err := pglock.New(setupDB(t), pglock.WithLeaseDuration(time.Second), pglock.WithHeartbeatFrequency(time.Second)); err != pglock.ErrDurationTooSmall {
 			t.Fatal("got unexpected error when the client was misconfigured")
 		}
 	})
@@ -92,8 +94,8 @@ func TestOpen(t *testing.T) {
 func TestFailIfLocked(t *testing.T) {
 	t.Parallel()
 	name := randStr(32)
-	c, err := pglock.Open(
-		*dsn,
+	c, err := pglock.New(
+		setupDB(t),
 		pglock.WithLogger(&testLogger{t}),
 		pglock.WithLeaseDuration(5*time.Second),
 		pglock.WithHeartbeatFrequency(1*time.Second),
@@ -115,8 +117,8 @@ func TestFailIfLocked(t *testing.T) {
 func TestKeepOnRelease(t *testing.T) {
 	t.Parallel()
 	name := randStr(32)
-	c, err := pglock.Open(
-		*dsn,
+	c, err := pglock.New(
+		setupDB(t),
 		pglock.WithLogger(&testLogger{t}),
 		pglock.WithLeaseDuration(5*time.Second),
 		pglock.WithHeartbeatFrequency(1*time.Second),
@@ -146,8 +148,8 @@ func TestKeepOnRelease(t *testing.T) {
 func TestClose(t *testing.T) {
 	t.Parallel()
 	name := randStr(32)
-	c, err := pglock.Open(
-		*dsn,
+	c, err := pglock.New(
+		setupDB(t),
 		pglock.WithLogger(&testLogger{t}),
 		pglock.WithLeaseDuration(5*time.Second),
 		pglock.WithHeartbeatFrequency(1*time.Second),
@@ -169,8 +171,8 @@ func TestClose(t *testing.T) {
 func TestAcquire(t *testing.T) {
 	t.Parallel()
 	name := randStr(32)
-	c, err := pglock.Open(
-		*dsn,
+	c, err := pglock.New(
+		setupDB(t),
 		pglock.WithLogger(&testLogger{t}),
 		pglock.WithLeaseDuration(5*time.Second),
 		pglock.WithHeartbeatFrequency(1*time.Second),
@@ -208,8 +210,8 @@ func TestGet(t *testing.T) {
 	t.Parallel()
 	t.Run("happy path - data", func(t *testing.T) {
 		name := randStr(32)
-		c, err := pglock.Open(
-			*dsn,
+		c, err := pglock.New(
+			setupDB(t),
 			pglock.WithLogger(&testLogger{t}),
 		)
 		if err != nil {
@@ -232,8 +234,8 @@ func TestGet(t *testing.T) {
 	t.Run("happy path - lock", func(t *testing.T) {
 		name := randStr(32)
 		const expectedOwner = "custom-owner"
-		c, err := pglock.Open(
-			*dsn,
+		c, err := pglock.New(
+			setupDB(t),
 			pglock.WithLogger(&testLogger{t}),
 			pglock.WithOwner(expectedOwner),
 		)
@@ -258,8 +260,8 @@ func TestGet(t *testing.T) {
 	})
 	t.Run("unknown key - data", func(t *testing.T) {
 		name := "lock-404"
-		c, err := pglock.Open(
-			*dsn,
+		c, err := pglock.New(
+			setupDB(t),
 			pglock.WithLogger(&testLogger{t}),
 		)
 		if err != nil {
@@ -279,8 +281,8 @@ func TestLockData(t *testing.T) {
 	t.Parallel()
 	t.Run("reuse lock data", func(t *testing.T) {
 		name := randStr(32)
-		c, err := pglock.Open(
-			*dsn,
+		c, err := pglock.New(
+			setupDB(t),
 			pglock.WithLogger(&testLogger{t}),
 		)
 		if err != nil {
@@ -308,8 +310,8 @@ func TestLockData(t *testing.T) {
 
 	t.Run("replace lock data", func(t *testing.T) {
 		name := randStr(32)
-		c, err := pglock.Open(
-			*dsn,
+		c, err := pglock.New(
+			setupDB(t),
 			pglock.WithLogger(&testLogger{t}),
 		)
 		if err != nil {
@@ -397,8 +399,8 @@ func TestCanceledContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	name := randStr(32)
-	c, err := pglock.Open(
-		*dsn,
+	c, err := pglock.New(
+		setupDB(t),
 		pglock.WithLogger(&testLogger{t}),
 	)
 	if err != nil {
@@ -460,8 +462,8 @@ func TestDo(t *testing.T) {
 
 	t.Run("normally completed", func(t *testing.T) {
 		name := randStr(32)
-		c, err := pglock.Open(
-			*dsn,
+		c, err := pglock.New(
+			setupDB(t),
 			pglock.WithLogger(&testLogger{t}),
 			pglock.WithLeaseDuration(5*time.Second),
 			pglock.WithHeartbeatFrequency(1*time.Second),
@@ -483,8 +485,8 @@ func TestDo(t *testing.T) {
 
 	t.Run("canceled context", func(t *testing.T) {
 		name := randStr(32)
-		c, err := pglock.Open(
-			*dsn,
+		c, err := pglock.New(
+			setupDB(t),
 			pglock.WithLogger(&testLogger{t}),
 			pglock.WithLeaseDuration(5*time.Second),
 			pglock.WithHeartbeatFrequency(1*time.Second),
@@ -504,8 +506,8 @@ func TestDo(t *testing.T) {
 
 	t.Run("handle failIfLocked", func(t *testing.T) {
 		name := randStr(32)
-		c, err := pglock.Open(
-			*dsn,
+		c, err := pglock.New(
+			setupDB(t),
 			pglock.WithLogger(&testLogger{t}),
 			pglock.WithLeaseDuration(5*time.Second),
 			pglock.WithHeartbeatFrequency(0),

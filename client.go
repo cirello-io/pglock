@@ -19,7 +19,6 @@ package pglock
 import (
 	"context"
 	"database/sql"
-	"database/sql/driver"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -51,35 +50,11 @@ const DefaultHeartbeatFrequency = 5 * time.Second
 // setups.
 type Client struct {
 	db                 *sql.DB
-	dsn                string
 	tableName          string
 	leaseDuration      time.Duration
 	heartbeatFrequency time.Duration
 	log                Logger
 	owner              string
-}
-
-// Open returns a locker client from the given postgresql data source name. In
-// this mode, it uses postgresql's LISTEN/NOTIFY to easen the transaction
-// retries.
-func Open(dsn string, opts ...ClientOption) (_ *Client, err error) {
-	var driveri driver.Driver = &pq.Driver{}
-	db := sql.OpenDB(dsnConnector{dsn: dsn, driver: driveri})
-	opts = append(opts, withDSN(dsn))
-	return New(db, opts...)
-}
-
-type dsnConnector struct {
-	dsn    string
-	driver driver.Driver
-}
-
-func (t dsnConnector) Connect(_ context.Context) (driver.Conn, error) {
-	return t.driver.Open(t.dsn)
-}
-
-func (t dsnConnector) Driver() driver.Driver {
-	return t.driver
 }
 
 // New returns a locker client from the given database connection. In this mode,
@@ -494,43 +469,15 @@ const maxRetries = 1024
 
 func (c *Client) retry(f func() error) error {
 	var err error
-	listener, listenerCloser := c.subscribeNotifications()
-	defer listenerCloser()
 	for i := 0; i < maxRetries; i++ {
 		err = f()
 		if failedPrecondition := (&FailedPreconditionError{}); err == nil || !xerrors.As(err, &failedPrecondition) {
 			break
 		}
 		c.log.Println("bad transaction, retrying:", err)
-		select {
-		case <-listener.NotificationChannel():
-			c.log.Println("reacted to notification")
-		case <-time.After(c.leaseDuration):
-			c.log.Println("reacted to leaseDuration")
-		}
+		time.Sleep(c.heartbeatFrequency)
 	}
 	return err
-}
-
-func (c *Client) subscribeNotifications() (*pq.Listener, func() error) {
-	notifications := make(chan *pq.Notification)
-	close(notifications)
-	listener := &pq.Listener{
-		Notify: notifications,
-	}
-	listenerCloser := func() error { return nil }
-	if c.db != nil && c.dsn != "" {
-		const (
-			minListenReconnectInterval = 100 * time.Millisecond
-			maxListenReconnectInterval = 1 * time.Second
-		)
-		listener = pq.NewListener(c.dsn, minListenReconnectInterval, maxListenReconnectInterval, func(pq.ListenerEventType, error) {})
-		if err := listener.Listen("pglock"); err != nil {
-			c.log.Println("cannot subscribe to pglock listener:", err)
-		}
-		listenerCloser = listener.Close
-	}
-	return listener, listenerCloser
 }
 
 // ClientOption reconfigures the lock client
@@ -562,10 +509,6 @@ func WithCustomTable(tableName string) ClientOption {
 // WithOwner reconfigures the lock client to use a custom owner name.
 func WithOwner(owner string) ClientOption {
 	return func(c *Client) { c.owner = owner }
-}
-
-func withDSN(dsn string) ClientOption {
-	return func(c *Client) { c.dsn = dsn }
 }
 
 func typedError(err error, msg string) error {
