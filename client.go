@@ -57,8 +57,7 @@ type Client struct {
 	owner              string
 }
 
-// New returns a locker client from the given database connection. In this mode,
-// it does not use postgresql's LISTEN/NOTIFY to easen the transaction retries.
+// New returns a locker client from the given database connection.
 func New(db *sql.DB, opts ...ClientOption) (_ *Client, err error) {
 	if db == nil {
 		return nil, ErrNotPostgreSQLDriver
@@ -159,7 +158,6 @@ func (c *Client) tryAcquire(ctx context.Context, l *Lock) error {
 	if err != nil {
 		return err
 	}
-	c.notify()
 	ctx, cancel := context.WithCancel(ctx)
 	l.heartbeatCancel = cancel
 	go c.heartbeat(ctx, l)
@@ -254,7 +252,6 @@ func (c *Client) do(ctx context.Context, l *Lock, f func(context.Context, *Lock)
 	if err != nil {
 		return err
 	}
-	c.notify()
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	l.heartbeatCancel = cancel
@@ -324,7 +321,6 @@ func (c *Client) storeRelease(ctx context.Context, l *Lock) error {
 	}
 	l.isReleased = true
 	l.heartbeatCancel()
-	c.notify()
 	return nil
 }
 
@@ -393,7 +389,6 @@ func (c *Client) storeHeartbeat(ctx context.Context, l *Lock) error {
 		return typedError(err, "cannot commit lock heartbeat")
 	}
 	l.recordVersionNumber = rvn
-	c.notify()
 	return nil
 }
 
@@ -458,11 +453,6 @@ func (c *Client) getNextRVN(ctx context.Context, tx *sql.Tx) (int64, error) {
 	var rvn int64
 	err := rowRVN.Scan(&rvn)
 	return rvn, err
-}
-
-func (c *Client) notify() {
-	_, err := c.db.Exec(fmt.Sprintf("NOTIFY pglock, '%s'", time.Now()))
-	c.log.Println("notification sent:", err)
 }
 
 const maxRetries = 1024
