@@ -160,6 +160,7 @@ func (c *Client) tryAcquire(ctx context.Context, l *Lock) error {
 	}
 	ctx, cancel := context.WithCancel(ctx)
 	l.heartbeatCancel = cancel
+	l.heartbeatWG.Add(1)
 	go c.heartbeat(ctx, l)
 	return nil
 }
@@ -255,6 +256,7 @@ func (c *Client) do(ctx context.Context, l *Lock, f func(context.Context, *Lock)
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	l.heartbeatCancel = cancel
+	l.heartbeatWG.Add(1)
 	go func() {
 		defer cancel()
 		c.heartbeat(ctx, l)
@@ -321,10 +323,12 @@ func (c *Client) storeRelease(ctx context.Context, l *Lock) error {
 	}
 	l.isReleased = true
 	l.heartbeatCancel()
+	l.heartbeatWG.Wait()
 	return nil
 }
 
 func (c *Client) heartbeat(ctx context.Context, l *Lock) {
+	defer l.heartbeatWG.Done()
 	if c.heartbeatFrequency <= 0 {
 		c.log.Println("heartbeat disabled:", l.name)
 		return

@@ -27,6 +27,7 @@ type Lock struct {
 	client          *Client
 	name            string
 	owner           string
+	heartbeatWG     sync.WaitGroup
 	heartbeatCancel context.CancelFunc
 	leaseDuration   time.Duration
 
