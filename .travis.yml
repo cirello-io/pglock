@@ -4,6 +4,9 @@ go_import_path: cirello.io/pglock
 go:
   - "1.12.6"
 
+env:
+  - GO111MODULE=on
+
 services:
   - docker
 
