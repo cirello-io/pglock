@@ -61,8 +61,6 @@ type Client struct {
 func New(db *sql.DB, opts ...ClientOption) (_ *Client, err error) {
 	if db == nil {
 		return nil, ErrNotPostgreSQLDriver
-	} else if _, ok := db.Driver().(*pq.Driver); !ok {
-		return nil, ErrNotPostgreSQLDriver
 	}
 	c := &Client{
 		db:                 db,
