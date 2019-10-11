@@ -42,7 +42,6 @@ func (fd *fakeDriver) Open(string) (driver.Conn, error) {
 var dsn = flag.String("dsn", "postgres://postgres@localhost/postgres?sslmode=disable", "connection string to the test database server")
 
 func init() {
-	flag.Parse()
 	db, err := sql.Open("postgres", *dsn)
 	if err != nil {
 		log.Fatal("cannot connect to test database server:", err)

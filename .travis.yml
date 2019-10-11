@@ -2,7 +2,7 @@ language: go
 sudo: required
 go_import_path: cirello.io/pglock
 go:
-  - "1.12.6"
+  - "1.13.1"
 
 env:
   - GO111MODULE=on
