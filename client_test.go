@@ -22,7 +22,6 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"flag"
-	"log"
 	"math/rand"
 	"sync"
 	"testing"
@@ -41,23 +40,16 @@ func (fd *fakeDriver) Open(string) (driver.Conn, error) {
 
 var dsn = flag.String("dsn", "postgres://postgres@localhost/postgres?sslmode=disable", "connection string to the test database server")
 
-func init() {
-	db, err := sql.Open("postgres", *dsn)
-	if err != nil {
-		log.Fatal("cannot connect to test database server:", err)
-	}
-	c, err := pglock.New(db)
-	if err != nil {
-		log.Fatal(err)
-	}
-	_ = c.CreateTable()
-}
-
 func setupDB(t *testing.T) *sql.DB {
 	db, err := sql.Open("postgres", *dsn)
 	if err != nil {
 		t.Fatal("cannot connect to test database server:", err)
 	}
+	c, err := pglock.New(db)
+	if err != nil {
+		t.Fatal("cannot connect:", err)
+	}
+	_ = c.CreateTable()
 	return db
 }
 
