@@ -280,7 +280,13 @@ func (c *Client) ReleaseContext(ctx context.Context, l *Lock) error {
 
 func (c *Client) storeRelease(ctx context.Context, l *Lock) error {
 	l.mu.Lock()
-	defer l.mu.Unlock()
+	defer func() {
+		isReleased := l.isReleased
+		l.mu.Unlock()
+		if isReleased {
+			l.heartbeatWG.Wait()
+		}
+	}()
 	ctx, cancel := context.WithTimeout(ctx, l.leaseDuration)
 	defer cancel()
 	tx, err := c.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
@@ -323,7 +329,6 @@ func (c *Client) storeRelease(ctx context.Context, l *Lock) error {
 	}
 	l.isReleased = true
 	l.heartbeatCancel()
-	l.heartbeatWG.Wait()
 	return nil
 }
 
