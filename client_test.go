@@ -63,15 +63,20 @@ func setupDB(t *testing.T) *sql.DB {
 
 func TestNew(t *testing.T) {
 	t.Parallel()
+	sql.Register("fakeDriver", &fakeDriver{})
+	// Skipping driver type assertion so to avoid importing another DB
+	// driver just for this particular case.
 	t.Run("nil driver", func(t *testing.T) {
 		if _, err := pglock.New(nil); err == nil {
 			t.Error("bad driver should trigger a pglock.ErrNotPostgreSQLDriver")
 		}
 	})
+	t.Run("nil driver at unsafe", func(t *testing.T) {
+		if _, err := pglock.UnsafeNew(nil); err == nil {
+			t.Error("bad driver should trigger a pglock.ErrNotPostgreSQLDriver")
+		}
+	})
 	t.Run("bad driver", func(t *testing.T) {
-		sql.Register("fakeDriver", &fakeDriver{})
-		// Skipping driver type assertion so to avoid importing another DB
-		// driver just for this particular case.
 		db, err := sql.Open("fakeDriver", *dsn)
 		if err != nil {
 			t.Fatal("cannot connect to test database server:", err)
@@ -86,6 +91,15 @@ func TestNew(t *testing.T) {
 			t.Fatal("cannot connect to test database server:", err)
 		}
 		if _, err := pglock.New(db, pglock.WithLeaseDuration(time.Second), pglock.WithHeartbeatFrequency(time.Second)); err != pglock.ErrDurationTooSmall {
+			t.Fatal("got unexpected error when the client was misconfigured:", err)
+		}
+	})
+	t.Run("bad driver at unsafe", func(t *testing.T) {
+		db, err := sql.Open("fakeDriver", *dsn)
+		if err != nil {
+			t.Fatal("cannot connect to test database server:", err)
+		}
+		if _, err := pglock.UnsafeNew(db, pglock.WithLeaseDuration(time.Second), pglock.WithHeartbeatFrequency(time.Second)); err != pglock.ErrDurationTooSmall {
 			t.Fatal("got unexpected error when the client was misconfigured:", err)
 		}
 	})

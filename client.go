@@ -57,13 +57,27 @@ type Client struct {
 	owner              string
 }
 
-// New returns a locker client from the given database connection.
+// New returns a locker client from the given database connection. This function
+// validates that *sql.DB holds a ratified postgreSQL driver (lib/pq).
 func New(db *sql.DB, opts ...ClientOption) (_ *Client, err error) {
 	if db == nil {
 		return nil, ErrNotPostgreSQLDriver
 	} else if _, ok := db.Driver().(*pq.Driver); !ok {
 		return nil, ErrNotPostgreSQLDriver
 	}
+	return newClient(db, opts...)
+}
+
+// UnsafeNew returns a locker client from the given database connection. This
+// function does not check if *sql.DB holds a ratified postgreSQL driver.
+func UnsafeNew(db *sql.DB, opts ...ClientOption) (_ *Client, err error) {
+	if db == nil {
+		return nil, ErrNotPostgreSQLDriver
+	}
+	return newClient(db, opts...)
+}
+
+func newClient(db *sql.DB, opts ...ClientOption) (_ *Client, err error) {
 	c := &Client{
 		db:                 db,
 		tableName:          DefaultTableName,
