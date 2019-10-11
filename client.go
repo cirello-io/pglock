@@ -279,8 +279,17 @@ func (c *Client) ReleaseContext(ctx context.Context, l *Lock) error {
 }
 
 func (c *Client) storeRelease(ctx context.Context, l *Lock) error {
+	c.log.Println("storeRelease", l.name, l.recordVersionNumber)
 	l.mu.Lock()
-	defer l.mu.Unlock()
+	locked := true
+	unlock := func() {
+		// be careful - we may have unlocked already - see the bottom of the function
+		if locked {
+			locked = false
+			l.mu.Unlock()
+		}
+	}
+	defer unlock()
 	ctx, cancel := context.WithTimeout(ctx, l.leaseDuration)
 	defer cancel()
 	tx, err := c.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
@@ -322,6 +331,9 @@ func (c *Client) storeRelease(ctx context.Context, l *Lock) error {
 		return typedError(err, "cannot commit lock release")
 	}
 	l.isReleased = true
+	// unlock before waiting - the storeHeartbeat function may be hanging on this lock,
+	// so we need to unblock it before we wait for heartbeating to be done.
+	unlock()
 	l.heartbeatCancel()
 	l.heartbeatWG.Wait()
 	return nil
