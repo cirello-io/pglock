@@ -636,10 +636,7 @@ func (t *testLogger) Println(v ...interface{}) {
 }
 
 func TestSendHeartbeat(t *testing.T) {
-	db, err := sql.Open("postgres", *dsn)
-	if err != nil {
-		t.Fatal("cannot connect to test database server:", err)
-	}
+	db := setupDB(t)
 	defer db.Close()
 	t.Run("bad sendHeartbeat", func(t *testing.T) {
 		c, err := pglock.New(
@@ -694,10 +691,7 @@ func TestSendHeartbeat(t *testing.T) {
 }
 
 func testSendHeartbeatRacy(t *testing.T) {
-	db, err := sql.Open("postgres", *dsn)
-	if err != nil {
-		t.Fatal("cannot connect to test database server:", err)
-	}
+	db := setupDB(t)
 	defer db.Close()
 	c, err := pglock.New(
 		db,
