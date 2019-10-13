@@ -20,10 +20,12 @@ script:
   - docker run -d --name pg96 -p 5496:5432 postgres:9.6
   - docker run -d --name pg10 -p 5410:5432 postgres:10
   - docker run -d --name pg11 -p 5411:5432 postgres:11
-  - go test -race                                      -v ./... -dsn=postgres://postgres:mysecretpassword@localhost:5411/postgres?sslmode=disable
+  - docker run -d --name pg12 -p 5412:5432 postgres:12
+  - go test -race                                      -v ./... -dsn=postgres://postgres:mysecretpassword@localhost:5412/postgres?sslmode=disable
   - go test                                            -v ./... -dsn=postgres://postgres:mysecretpassword@localhost:5495/postgres?sslmode=disable
   - go test                                            -v ./... -dsn=postgres://postgres:mysecretpassword@localhost:5496/postgres?sslmode=disable
   - go test                                            -v ./... -dsn=postgres://postgres:mysecretpassword@localhost:5410/postgres?sslmode=disable
-  - go test -covermode=count -coverprofile=profile.cov -v ./... -dsn=postgres://postgres:mysecretpassword@localhost:5411/postgres?sslmode=disable
+  - go test                                            -v ./... -dsn=postgres://postgres:mysecretpassword@localhost:5411/postgres?sslmode=disable
+  - go test -covermode=count -coverprofile=profile.cov -v ./... -dsn=postgres://postgres:mysecretpassword@localhost:5412/postgres?sslmode=disable
   - $GOPATH/bin/goveralls -coverprofile=profile.cov -service=travis-ci
-  - go test                                            -v ./... -dsn=postgres://postgres:mysecretpassword@localhost:5411/postgres?sslmode=disable -count=50 -run=TestStress
+  - go test                                            -v ./... -dsn=postgres://postgres:mysecretpassword@localhost:5412/postgres?sslmode=disable -count=50 -run=TestStress
