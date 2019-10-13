@@ -26,3 +26,4 @@ script:
   - go test                                            -v ./... -dsn=postgres://postgres:mysecretpassword@localhost:5410/postgres?sslmode=disable
   - go test -covermode=count -coverprofile=profile.cov -v ./... -dsn=postgres://postgres:mysecretpassword@localhost:5411/postgres?sslmode=disable
   - $GOPATH/bin/goveralls -coverprofile=profile.cov -service=travis-ci
+  - go test                                            -v ./... -dsn=postgres://postgres:mysecretpassword@localhost:5411/postgres?sslmode=disable -count=50 -run=TestStress
