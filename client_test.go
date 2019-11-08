@@ -690,6 +690,7 @@ type testLogger struct {
 }
 
 func (t *testLogger) Println(v ...interface{}) {
+	t.t.Helper()
 	t.t.Log(v...)
 }
 
