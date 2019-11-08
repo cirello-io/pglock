@@ -239,6 +239,7 @@ func (c *Client) storeAcquire(ctx context.Context, l *Lock) error {
 // f. If it ends normally (err == nil), it releases the lock.
 func (c *Client) Do(ctx context.Context, name string, f func(context.Context, *Lock) error, opts ...LockOption) error {
 	l := c.newLock(ctx, name, opts)
+	defer l.heartbeatWG.Wait()
 	defer l.Close()
 	for {
 		select {
