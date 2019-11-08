@@ -134,6 +134,37 @@ func TestFailIfLocked(t *testing.T) {
 	}
 }
 
+func TestCustomHeartbeatContext(t *testing.T) {
+	t.Parallel()
+	db := setupDB(t)
+	defer db.Close()
+	name := randStr(32)
+	c, err := pglock.New(
+		db,
+		pglock.WithLogger(&testLogger{t}),
+		pglock.WithLeaseDuration(5*time.Second),
+		pglock.WithHeartbeatFrequency(1*time.Second),
+	)
+	if err != nil {
+		t.Fatal("cannot create lock client:", err)
+	}
+	rootCtx := context.Background()
+	hbCtx, hbCancel := context.WithTimeout(rootCtx, 2*time.Second)
+	defer hbCancel()
+	l, err := c.AcquireContext(rootCtx, name, pglock.WithCustomHeartbeatContext(hbCtx))
+	if err != nil {
+		t.Fatal("unexpected error while acquiring lock:", err)
+	}
+	// wait for one heartbeat
+	time.Sleep(2 * time.Second)
+	if err := c.ReleaseContext(rootCtx, l); err != nil {
+		t.Fatal("cannot release lock:", err)
+	}
+	if hbCtx.Err() != context.DeadlineExceeded {
+		t.Fatal("lock close should only finish when the heartbeat goroutine is done:", hbCtx.Err())
+	}
+}
+
 func TestKeepOnRelease(t *testing.T) {
 	t.Parallel()
 	db := setupDB(t)

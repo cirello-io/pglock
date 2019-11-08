@@ -100,12 +100,14 @@ func isDurationTooSmall(c *Client) bool {
 	return c.heartbeatFrequency > 0 && c.leaseDuration < 2*c.heartbeatFrequency
 }
 
-func (c *Client) newLock(name string, opts []LockOption) *Lock {
+func (c *Client) newLock(ctx context.Context, name string, opts []LockOption) *Lock {
+	heartbeatContext, heartbeatCancel := context.WithCancel(ctx)
 	l := &Lock{
-		client:          c,
-		name:            name,
-		leaseDuration:   c.leaseDuration,
-		heartbeatCancel: func() {},
+		client:           c,
+		name:             name,
+		leaseDuration:    c.leaseDuration,
+		heartbeatContext: heartbeatContext,
+		heartbeatCancel:  heartbeatCancel,
 	}
 	for _, opt := range opts {
 		opt(l)
@@ -144,7 +146,7 @@ func (c *Client) Acquire(name string, opts ...LockOption) (*Lock, error) {
 // it succeeds or the context is done. It returns ErrNotAcquired if the context
 // is canceled before the lock is acquired.
 func (c *Client) AcquireContext(ctx context.Context, name string, opts ...LockOption) (*Lock, error) {
-	l := c.newLock(name, opts)
+	l := c.newLock(ctx, name, opts)
 	for {
 		select {
 		case <-ctx.Done():
@@ -172,8 +174,6 @@ func (c *Client) tryAcquire(ctx context.Context, l *Lock) error {
 	if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithCancel(ctx)
-	l.heartbeatCancel = cancel
 	l.heartbeatWG.Add(1)
 	go c.heartbeat(ctx, l)
 	return nil
@@ -238,7 +238,7 @@ func (c *Client) storeAcquire(ctx context.Context, l *Lock) error {
 // is detected in the heartbeat, it is going to cancel the context passed on to
 // f. If it ends normally (err == nil), it releases the lock.
 func (c *Client) Do(ctx context.Context, name string, f func(context.Context, *Lock) error, opts ...LockOption) error {
-	l := c.newLock(name, opts)
+	l := c.newLock(ctx, name, opts)
 	defer l.Close()
 	for {
 		select {
@@ -461,7 +461,7 @@ func (c *Client) getLock(ctx context.Context, name string) (*Lock, error) {
 			"name" = $1
 		FOR UPDATE
 	`, name)
-	l := c.newLock(name, nil)
+	l := c.newLock(ctx, name, nil)
 	l.isReleased = true
 	l.recordVersionNumber = -1
 	err := row.Scan(&l.name, &l.owner, &l.data)

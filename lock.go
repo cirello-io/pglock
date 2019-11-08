@@ -24,12 +24,13 @@ import (
 
 // Lock is the mutex entry in the database.
 type Lock struct {
-	client          *Client
-	name            string
-	owner           string
-	heartbeatWG     sync.WaitGroup
-	heartbeatCancel context.CancelFunc
-	leaseDuration   time.Duration
+	client           *Client
+	name             string
+	owner            string
+	heartbeatWG      sync.WaitGroup
+	heartbeatContext context.Context
+	heartbeatCancel  context.CancelFunc
+	leaseDuration    time.Duration
 
 	replaceData   bool
 	data          []byte
@@ -78,6 +79,14 @@ func (l *Lock) RecordVersionNumber() int64 {
 
 // LockOption reconfigures how the lock behaves on acquire and release.
 type LockOption func(*Lock)
+
+// WithCustomHeartbeatContext will override the context used for the heartbeats.
+// It means the cancelation now is responsibility of the caller of the lock.
+func WithCustomHeartbeatContext(ctx context.Context) LockOption {
+	return func(l *Lock) {
+		l.heartbeatContext, l.heartbeatCancel = context.WithCancel(ctx)
+	}
+}
 
 // FailIfLocked will not retry to acquire the lock, instead returning.
 func FailIfLocked() LockOption {
