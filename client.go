@@ -175,7 +175,7 @@ func (c *Client) tryAcquire(ctx context.Context, l *Lock) error {
 		return err
 	}
 	l.heartbeatWG.Add(1)
-	go c.heartbeat(ctx, l)
+	go c.heartbeat(l.heartbeatContext, l)
 	return nil
 }
 
@@ -267,13 +267,11 @@ func (c *Client) do(ctx context.Context, l *Lock, f func(context.Context, *Lock)
 	if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	l.heartbeatCancel = cancel
+	defer l.heartbeatCancel()
 	l.heartbeatWG.Add(1)
 	go func() {
-		defer cancel()
-		c.heartbeat(ctx, l)
+		defer l.heartbeatCancel()
+		c.heartbeat(l.heartbeatContext, l)
 	}()
 	return f(ctx, l)
 }

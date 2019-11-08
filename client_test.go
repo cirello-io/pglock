@@ -136,33 +136,60 @@ func TestFailIfLocked(t *testing.T) {
 
 func TestCustomHeartbeatContext(t *testing.T) {
 	t.Parallel()
-	db := setupDB(t)
-	defer db.Close()
-	name := randStr(32)
-	c, err := pglock.New(
-		db,
-		pglock.WithLogger(&testLogger{t}),
-		pglock.WithLeaseDuration(5*time.Second),
-		pglock.WithHeartbeatFrequency(1*time.Second),
-	)
-	if err != nil {
-		t.Fatal("cannot create lock client:", err)
-	}
-	rootCtx := context.Background()
-	hbCtx, hbCancel := context.WithTimeout(rootCtx, 2*time.Second)
-	defer hbCancel()
-	l, err := c.AcquireContext(rootCtx, name, pglock.WithCustomHeartbeatContext(hbCtx))
-	if err != nil {
-		t.Fatal("unexpected error while acquiring lock:", err)
-	}
-	// wait for one heartbeat
-	time.Sleep(2 * time.Second)
-	if err := c.ReleaseContext(rootCtx, l); err != nil {
-		t.Fatal("cannot release lock:", err)
-	}
-	if hbCtx.Err() != context.DeadlineExceeded {
-		t.Fatal("lock close should only finish when the heartbeat goroutine is done:", hbCtx.Err())
-	}
+	t.Run("custom context", func(t *testing.T) {
+		db := setupDB(t)
+		defer db.Close()
+		name := randStr(32)
+		const heartbeatFrequency = 2 * time.Second
+		c, err := pglock.New(
+			db,
+			pglock.WithLogger(&testLogger{t}),
+			pglock.WithLeaseDuration(heartbeatFrequency*3),
+			pglock.WithHeartbeatFrequency(heartbeatFrequency),
+		)
+		if err != nil {
+			t.Fatal("cannot create lock client:", err)
+		}
+		hbCtx, hbCancel := context.WithCancel(context.Background())
+		l, err := c.Acquire(name, pglock.WithCustomHeartbeatContext(hbCtx))
+		if err != nil {
+			t.Fatal("unexpected error while acquiring lock:", err)
+		}
+		originalRVN := l.RecordVersionNumber()
+		hbCancel()
+		time.Sleep(time.Second + heartbeatFrequency)
+		newRVN := l.RecordVersionNumber()
+		t.Log("rvn", originalRVN, newRVN)
+		if originalRVN != newRVN {
+			t.Fatal("heartbeat did not stop after cancel")
+		}
+	})
+	t.Run("inherited context", func(t *testing.T) {
+		db := setupDB(t)
+		defer db.Close()
+		name := randStr(32)
+		const heartbeatFrequency = 2 * time.Second
+		c, err := pglock.New(
+			db,
+			pglock.WithLogger(&testLogger{t}),
+			pglock.WithLeaseDuration(heartbeatFrequency*3),
+			pglock.WithHeartbeatFrequency(heartbeatFrequency),
+		)
+		if err != nil {
+			t.Fatal("cannot create lock client:", err)
+		}
+		l, err := c.Acquire(name)
+		if err != nil {
+			t.Fatal("unexpected error while acquiring lock:", err)
+		}
+		originalRVN := l.RecordVersionNumber()
+		time.Sleep(time.Second + heartbeatFrequency)
+		newRVN := l.RecordVersionNumber()
+		t.Log("rvn", originalRVN, newRVN)
+		if originalRVN == newRVN {
+			t.Fatal("heartbeat did not run")
+		}
+	})
 }
 
 func TestKeepOnRelease(t *testing.T) {
