@@ -31,6 +31,10 @@ import (
 	"golang.org/x/xerrors"
 )
 
+func (c *Client) WaitHeartbeats() {
+	c.heartbeatWG.Wait()
+}
+
 func TestTypedError(t *testing.T) {
 	if err, e := typedError(fmt.Errorf("random error"), ""), (&OtherError{}); !xerrors.As(err, &e) {
 		t.Errorf("mistyped error found (OtherError): %#v", err)

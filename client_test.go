@@ -510,6 +510,7 @@ func TestDo(t *testing.T) {
 		if err != nil {
 			t.Fatal("cannot create lock client:", err)
 		}
+		defer c.WaitHeartbeats()
 		ranOnce := make(chan struct{})
 		var wg sync.WaitGroup
 		wg.Add(1)

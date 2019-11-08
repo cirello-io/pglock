@@ -24,6 +24,7 @@ import (
 	"log"
 	"math/rand"
 	"net"
+	"sync"
 	"time"
 
 	"github.com/lib/pq"
@@ -55,6 +56,7 @@ type Client struct {
 	heartbeatFrequency time.Duration
 	log                Logger
 	owner              string
+	heartbeatWG        sync.WaitGroup
 }
 
 // New returns a locker client from the given database connection. This function
@@ -174,6 +176,7 @@ func (c *Client) tryAcquire(ctx context.Context, l *Lock) error {
 	if err != nil {
 		return err
 	}
+	c.heartbeatWG.Add(1)
 	l.heartbeatWG.Add(1)
 	go c.heartbeat(l.heartbeatContext, l)
 	return nil
@@ -269,12 +272,13 @@ func (c *Client) do(ctx context.Context, l *Lock, f func(context.Context, *Lock)
 		return err
 	}
 	defer l.heartbeatCancel()
+	c.heartbeatWG.Add(1)
 	l.heartbeatWG.Add(1)
 	go func() {
 		defer l.heartbeatCancel()
 		c.heartbeat(l.heartbeatContext, l)
 	}()
-	return f(ctx, l)
+	return f(l.heartbeatContext, l)
 }
 
 // Release will update the mutex entry to be able to be taken by other clients.
@@ -346,6 +350,7 @@ func (c *Client) storeRelease(ctx context.Context, l *Lock) error {
 }
 
 func (c *Client) heartbeat(ctx context.Context, l *Lock) {
+	defer c.heartbeatWG.Done()
 	defer l.heartbeatWG.Done()
 	if c.heartbeatFrequency <= 0 {
 		c.log.Println("heartbeat disabled:", l.name)
