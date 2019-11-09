@@ -163,6 +163,8 @@ func TestCustomHeartbeatContext(t *testing.T) {
 		if originalRVN != newRVN {
 			t.Fatal("heartbeat did not stop after cancel")
 		}
+		// wait for the last heartbeat to log its output.
+		time.Sleep(heartbeatFrequency + 100*time.Millisecond)
 	})
 	t.Run("inherited context", func(t *testing.T) {
 		db := setupDB(t)
@@ -189,6 +191,8 @@ func TestCustomHeartbeatContext(t *testing.T) {
 		if originalRVN == newRVN {
 			t.Fatal("heartbeat did not run")
 		}
+		// wait for the last heartbeat to log its output.
+		time.Sleep(heartbeatFrequency + 100*time.Millisecond)
 	})
 }
 
