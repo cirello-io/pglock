@@ -219,6 +219,7 @@ func TestKeepOnRelease(t *testing.T) {
 	if err != nil {
 		t.Fatal("unexpected error while acquiring lock:", err)
 	}
+	defer l2.Close()
 	t.Log("lock reacquired")
 	defer l.Close()
 	if !bytes.Equal(l2.Data(), expected) {
