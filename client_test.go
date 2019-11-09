@@ -586,6 +586,33 @@ func TestDo(t *testing.T) {
 		}
 	})
 
+	t.Run("canceled heartbeat context", func(t *testing.T) {
+		name := randStr(32)
+		c, err := pglock.New(
+			db,
+			pglock.WithLogger(&testLogger{t}),
+			pglock.WithLeaseDuration(5*time.Second),
+			pglock.WithHeartbeatFrequency(1*time.Second),
+		)
+		if err != nil {
+			t.Fatal("cannot create lock client:", err)
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		err = c.Do(context.Background(), name, func(ctx context.Context, l *pglock.Lock) error {
+			for {
+				if err := ctx.Err(); err != nil {
+					return err
+				}
+				t.Log("ping")
+				time.Sleep(1 * time.Second)
+			}
+		}, pglock.WithCustomHeartbeatContext(ctx))
+		if err != nil && err != context.Canceled {
+			t.Fatal("unexpected error while running under lock:", err)
+		}
+	})
+
 	t.Run("handle failIfLocked", func(t *testing.T) {
 		name := randStr(32)
 		c, err := pglock.New(

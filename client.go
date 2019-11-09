@@ -267,6 +267,8 @@ func (c *Client) Do(ctx context.Context, name string, f func(context.Context, *L
 }
 
 func (c *Client) do(ctx context.Context, l *Lock, f func(context.Context, *Lock) error) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	err := c.storeAcquire(ctx, l)
 	if err != nil {
 		return err
@@ -275,10 +277,11 @@ func (c *Client) do(ctx context.Context, l *Lock, f func(context.Context, *Lock)
 	c.heartbeatWG.Add(1)
 	l.heartbeatWG.Add(1)
 	go func() {
+		defer cancel()
 		defer l.heartbeatCancel()
 		c.heartbeat(l.heartbeatContext, l)
 	}()
-	return f(l.heartbeatContext, l)
+	return f(ctx, l)
 }
 
 // Release will update the mutex entry to be able to be taken by other clients.
