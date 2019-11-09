@@ -259,11 +259,12 @@ func TestAcquire(t *testing.T) {
 	db := setupDB(t)
 	defer db.Close()
 	name := randStr(32)
+	const heartbeatFrequency = 1 * time.Second
 	c, err := pglock.New(
 		db,
 		pglock.WithLogger(&testLogger{t}),
 		pglock.WithLeaseDuration(5*time.Second),
-		pglock.WithHeartbeatFrequency(1*time.Second),
+		pglock.WithHeartbeatFrequency(heartbeatFrequency),
 	)
 	if err != nil {
 		t.Fatal("cannot create lock client:", err)
@@ -292,6 +293,8 @@ func TestAcquire(t *testing.T) {
 	if !locked {
 		t.Fatal("concurrent lock flow is not working")
 	}
+	// wait for the last heartbeat to log its output.
+	time.Sleep(heartbeatFrequency + 100*time.Millisecond)
 }
 
 func TestGet(t *testing.T) {
