@@ -24,7 +24,6 @@ import (
 	"log"
 	"math/rand"
 	"net"
-	"sync"
 	"time"
 
 	"github.com/lib/pq"
@@ -56,7 +55,6 @@ type Client struct {
 	heartbeatFrequency time.Duration
 	log                Logger
 	owner              string
-	heartbeatWG        sync.WaitGroup
 }
 
 // New returns a locker client from the given database connection. This function
@@ -176,9 +174,10 @@ func (c *Client) tryAcquire(ctx context.Context, l *Lock) error {
 	if err != nil {
 		return err
 	}
-	c.heartbeatWG.Add(1)
-	l.heartbeatWG.Add(1)
-	go c.heartbeat(l.heartbeatContext, l)
+	if c.heartbeatFrequency > 0 {
+		l.heartbeatWG.Add(1)
+		go c.heartbeat(l.heartbeatContext, l)
+	}
 	return nil
 }
 
@@ -257,7 +256,7 @@ func (c *Client) Do(ctx context.Context, name string, f func(context.Context, *L
 				c.log.Println("not acquired, wait:", l.leaseDuration)
 				time.Sleep(l.leaseDuration)
 				continue
-			} else if err != nil {
+			} else if err != nil || l.heartbeatContext.Err() != nil {
 				c.log.Println("error:", err)
 				return err
 			}
@@ -273,14 +272,15 @@ func (c *Client) do(ctx context.Context, l *Lock, f func(context.Context, *Lock)
 	if err != nil {
 		return err
 	}
-	defer l.heartbeatCancel()
-	c.heartbeatWG.Add(1)
-	l.heartbeatWG.Add(1)
-	go func() {
-		defer cancel()
+	if c.heartbeatFrequency > 0 {
 		defer l.heartbeatCancel()
-		c.heartbeat(l.heartbeatContext, l)
-	}()
+		l.heartbeatWG.Add(1)
+		go func() {
+			defer cancel()
+			defer l.heartbeatCancel()
+			c.heartbeat(l.heartbeatContext, l)
+		}()
+	}
 	return f(ctx, l)
 }
 
@@ -353,23 +353,14 @@ func (c *Client) storeRelease(ctx context.Context, l *Lock) error {
 }
 
 func (c *Client) heartbeat(ctx context.Context, l *Lock) {
-	defer c.heartbeatWG.Done()
 	defer l.heartbeatWG.Done()
-	if c.heartbeatFrequency <= 0 {
-		c.log.Println("heartbeat disabled:", l.name)
-		return
-	}
-	defer c.log.Println("heartbeat stopped:", l.name)
 	for {
-		select {
-		case <-ctx.Done():
+		if err := ctx.Err(); err != nil {
 			return
-		case <-time.After(c.heartbeatFrequency):
-			if err := c.SendHeartbeat(ctx, l); err != nil {
-				c.log.Println("heartbeat missed:", l.name, err)
-				return
-			}
+		} else if err := c.SendHeartbeat(ctx, l); err != nil {
+			return
 		}
+		time.Sleep(c.heartbeatFrequency)
 	}
 }
 

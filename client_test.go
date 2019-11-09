@@ -22,7 +22,6 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"flag"
-	"math/rand"
 	"sync"
 	"testing"
 	"time"
@@ -163,8 +162,6 @@ func TestCustomHeartbeatContext(t *testing.T) {
 		if originalRVN != newRVN {
 			t.Fatal("heartbeat did not stop after cancel")
 		}
-		// wait for the last heartbeat to log its output.
-		time.Sleep(heartbeatFrequency + 100*time.Millisecond)
 	})
 	t.Run("inherited context", func(t *testing.T) {
 		db := setupDB(t)
@@ -191,8 +188,6 @@ func TestCustomHeartbeatContext(t *testing.T) {
 		if originalRVN == newRVN {
 			t.Fatal("heartbeat did not run")
 		}
-		// wait for the last heartbeat to log its output.
-		time.Sleep(heartbeatFrequency + 100*time.Millisecond)
 	})
 }
 
@@ -293,8 +288,6 @@ func TestAcquire(t *testing.T) {
 	if !locked {
 		t.Fatal("concurrent lock flow is not working")
 	}
-	// wait for the last heartbeat to log its output.
-	time.Sleep(heartbeatFrequency + 100*time.Millisecond)
 }
 
 func TestGet(t *testing.T) {
@@ -518,7 +511,6 @@ func TestDo(t *testing.T) {
 		if err != nil {
 			t.Fatal("cannot create lock client:", err)
 		}
-		defer c.WaitHeartbeats()
 		ranOnce := make(chan struct{})
 		var wg sync.WaitGroup
 		wg.Add(1)
@@ -548,17 +540,16 @@ func TestDo(t *testing.T) {
 			t.Fatalf("cannot forcefully release lock: %v", err)
 		}
 		wg.Wait()
-		// wait for the last heartbeat to log its output.
-		time.Sleep(heartbeatFrequency + 100*time.Millisecond)
 	})
 
 	t.Run("normally completed", func(t *testing.T) {
+		const heartbeatFrequency = 1 * time.Second
 		name := randStr(32)
 		c, err := pglock.New(
 			db,
 			pglock.WithLogger(&testLogger{t}),
 			pglock.WithLeaseDuration(5*time.Second),
-			pglock.WithHeartbeatFrequency(1*time.Second),
+			pglock.WithHeartbeatFrequency(heartbeatFrequency),
 		)
 		if err != nil {
 			t.Fatal("cannot create lock client:", err)
@@ -576,12 +567,13 @@ func TestDo(t *testing.T) {
 	})
 
 	t.Run("canceled context", func(t *testing.T) {
+		const heartbeatFrequency = 1 * time.Second
 		name := randStr(32)
 		c, err := pglock.New(
 			db,
 			pglock.WithLogger(&testLogger{t}),
 			pglock.WithLeaseDuration(5*time.Second),
-			pglock.WithHeartbeatFrequency(1*time.Second),
+			pglock.WithHeartbeatFrequency(heartbeatFrequency),
 		)
 		if err != nil {
 			t.Fatal("cannot create lock client:", err)
@@ -597,12 +589,13 @@ func TestDo(t *testing.T) {
 	})
 
 	t.Run("canceled heartbeat context", func(t *testing.T) {
+		const heartbeatFrequency = 1 * time.Second
 		name := randStr(32)
 		c, err := pglock.New(
 			db,
 			pglock.WithLogger(&testLogger{t}),
 			pglock.WithLeaseDuration(5*time.Second),
-			pglock.WithHeartbeatFrequency(1*time.Second),
+			pglock.WithHeartbeatFrequency(heartbeatFrequency),
 		)
 		if err != nil {
 			t.Fatal("cannot create lock client:", err)
@@ -615,12 +608,13 @@ func TestDo(t *testing.T) {
 					return err
 				}
 				t.Log("ping")
-				time.Sleep(1 * time.Second)
+				time.Sleep(2 * heartbeatFrequency)
 			}
 		}, pglock.WithCustomHeartbeatContext(ctx))
 		if err != nil && err != context.Canceled {
 			t.Fatal("unexpected error while running under lock:", err)
 		}
+		t.Log("done")
 	})
 
 	t.Run("handle failIfLocked", func(t *testing.T) {
@@ -656,6 +650,7 @@ func TestDo(t *testing.T) {
 		if err != nil && err != context.Canceled {
 			t.Fatal("unexpected error while running under lock:", err)
 		}
+		t.Log("done")
 	})
 }
 
@@ -707,29 +702,6 @@ func releaseLockByName(db *sql.DB, name string) error {
 		}
 		return nil
 	}
-}
-
-var chars = []byte("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
-
-func init() {
-	rand.Seed(time.Now().UnixNano())
-}
-
-func randStr(n int) string {
-	var b bytes.Buffer
-	for i := 0; i < n; i++ {
-		b.WriteByte(chars[rand.Intn(len(chars))])
-	}
-	return b.String()
-}
-
-type testLogger struct {
-	t testing.TB
-}
-
-func (t *testLogger) Println(v ...interface{}) {
-	t.t.Helper()
-	t.t.Log(v...)
 }
 
 func TestSendHeartbeat(t *testing.T) {

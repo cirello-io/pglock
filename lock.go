@@ -22,6 +22,8 @@ import (
 	"time"
 )
 
+const lockMaxLogLines = 50
+
 // Lock is the mutex entry in the database.
 type Lock struct {
 	client           *Client
