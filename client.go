@@ -253,7 +253,6 @@ func (c *Client) Do(ctx context.Context, name string, f func(context.Context, *L
 	defer l.heartbeatCancel()
 	go func() {
 		<-l.heartbeatContext.Done()
-		l.heartbeatWG.Wait()
 		cancel()
 	}()
 	return f(ctx, l)
@@ -327,9 +326,9 @@ func (c *Client) storeRelease(ctx context.Context, l *Lock) error {
 }
 
 func (c *Client) heartbeat(ctx context.Context, l *Lock) {
+	defer l.heartbeatWG.Done()
 	c.log.Println("heartbeat started", l.name)
 	defer c.log.Println("heartbeat stopped", l.name)
-	defer l.heartbeatWG.Done()
 	for {
 		if err := ctx.Err(); err != nil {
 			return
