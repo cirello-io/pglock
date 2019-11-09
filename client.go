@@ -176,7 +176,10 @@ func (c *Client) tryAcquire(ctx context.Context, l *Lock) error {
 	}
 	if c.heartbeatFrequency > 0 {
 		l.heartbeatWG.Add(1)
-		go c.heartbeat(l.heartbeatContext, l)
+		go func() {
+			defer l.heartbeatCancel()
+			c.heartbeat(l.heartbeatContext, l)
+		}()
 	}
 	return nil
 }
@@ -240,47 +243,19 @@ func (c *Client) storeAcquire(ctx context.Context, l *Lock) error {
 // is detected in the heartbeat, it is going to cancel the context passed on to
 // f. If it ends normally (err == nil), it releases the lock.
 func (c *Client) Do(ctx context.Context, name string, f func(context.Context, *Lock) error, opts ...LockOption) error {
-	l := c.newLock(ctx, name, opts)
-	defer l.heartbeatWG.Wait()
-	defer l.Close()
-	for {
-		select {
-		case <-ctx.Done():
-			return ErrNotAcquired
-		default:
-			err := c.retry(func() error { return c.do(ctx, l, f) })
-			if l.failIfLocked && err == ErrNotAcquired {
-				c.log.Println("not acquired, exit")
-				return err
-			} else if err == ErrNotAcquired {
-				c.log.Println("not acquired, wait:", l.leaseDuration)
-				time.Sleep(l.leaseDuration)
-				continue
-			} else if err != nil || l.heartbeatContext.Err() != nil {
-				c.log.Println("error:", err)
-				return err
-			}
-			return nil
-		}
-	}
-}
-
-func (c *Client) do(ctx context.Context, l *Lock, f func(context.Context, *Lock) error) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	err := c.storeAcquire(ctx, l)
+	l, err := c.AcquireContext(ctx, name, opts...)
 	if err != nil {
 		return err
 	}
-	if c.heartbeatFrequency > 0 {
-		defer l.heartbeatCancel()
-		l.heartbeatWG.Add(1)
-		go func() {
-			defer cancel()
-			defer l.heartbeatCancel()
-			c.heartbeat(l.heartbeatContext, l)
-		}()
-	}
+	defer l.Close()
+	defer l.heartbeatCancel()
+	go func() {
+		<-l.heartbeatContext.Done()
+		l.heartbeatWG.Wait()
+		cancel()
+	}()
 	return f(ctx, l)
 }
 
@@ -293,20 +268,19 @@ func (c *Client) Release(l *Lock) error {
 // clients.
 func (c *Client) ReleaseContext(ctx context.Context, l *Lock) error {
 	if l.IsReleased() {
+		l.heartbeatWG.Wait()
 		return ErrLockAlreadyReleased
 	}
-	return c.retry(func() error { return c.storeRelease(ctx, l) })
+	err := c.retry(func() error { return c.storeRelease(ctx, l) })
+	if l.IsReleased() {
+		l.heartbeatWG.Wait()
+	}
+	return err
 }
 
 func (c *Client) storeRelease(ctx context.Context, l *Lock) error {
 	l.mu.Lock()
-	defer func() {
-		isReleased := l.isReleased
-		l.mu.Unlock()
-		if isReleased {
-			l.heartbeatWG.Wait()
-		}
-	}()
+	defer l.mu.Unlock()
 	ctx, cancel := context.WithTimeout(ctx, l.leaseDuration)
 	defer cancel()
 	tx, err := c.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
@@ -353,11 +327,14 @@ func (c *Client) storeRelease(ctx context.Context, l *Lock) error {
 }
 
 func (c *Client) heartbeat(ctx context.Context, l *Lock) {
+	c.log.Println("heartbeat started", l.name)
+	defer c.log.Println("heartbeat stopped", l.name)
 	defer l.heartbeatWG.Done()
 	for {
 		if err := ctx.Err(); err != nil {
 			return
 		} else if err := c.SendHeartbeat(ctx, l); err != nil {
+			defer c.log.Println("heartbeat missed", err)
 			return
 		}
 		time.Sleep(c.heartbeatFrequency)

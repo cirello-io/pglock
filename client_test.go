@@ -154,6 +154,7 @@ func TestCustomHeartbeatContext(t *testing.T) {
 		if err != nil {
 			t.Fatal("unexpected error while acquiring lock:", err)
 		}
+		defer l.Close()
 		originalRVN := l.RecordVersionNumber()
 		hbCancel()
 		time.Sleep(time.Second + heartbeatFrequency)
@@ -181,6 +182,7 @@ func TestCustomHeartbeatContext(t *testing.T) {
 		if err != nil {
 			t.Fatal("unexpected error while acquiring lock:", err)
 		}
+		defer l.Close()
 		originalRVN := l.RecordVersionNumber()
 		time.Sleep(time.Second + heartbeatFrequency)
 		newRVN := l.RecordVersionNumber()
