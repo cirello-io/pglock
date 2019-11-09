@@ -500,12 +500,13 @@ func TestDo(t *testing.T) {
 	db := setupDB(t)
 	defer db.Close()
 	t.Run("lost lock", func(t *testing.T) {
+		const heartbeatFrequency = 1 * time.Second
 		name := randStr(32)
 		c, err := pglock.New(
 			db,
 			pglock.WithLogger(&testLogger{t}),
 			pglock.WithLeaseDuration(5*time.Second),
-			pglock.WithHeartbeatFrequency(1*time.Second),
+			pglock.WithHeartbeatFrequency(heartbeatFrequency),
 		)
 		if err != nil {
 			t.Fatal("cannot create lock client:", err)
@@ -540,6 +541,8 @@ func TestDo(t *testing.T) {
 			t.Fatalf("cannot forcefully release lock: %v", err)
 		}
 		wg.Wait()
+		// wait for the last heartbeat to log its output.
+		time.Sleep(heartbeatFrequency + 100*time.Millisecond)
 	})
 
 	t.Run("normally completed", func(t *testing.T) {
