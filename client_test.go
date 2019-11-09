@@ -798,3 +798,27 @@ func testSendHeartbeatRacy(t *testing.T) {
 	}
 	wg.Wait()
 }
+
+func TestReleaseLostLock(t *testing.T) {
+	db := setupDB(t)
+	defer db.Close()
+	name := randStr(32)
+	c, err := pglock.New(
+		db,
+		pglock.WithLogger(&testLogger{t}),
+		pglock.WithLeaseDuration(5*time.Second),
+		pglock.WithHeartbeatFrequency(0),
+	)
+	if err != nil {
+		t.Fatal("cannot create lock client:", err)
+	}
+	l, err := c.Acquire(name)
+	if err != nil {
+		t.Fatal("cannot acquire lock:", err)
+	}
+	t.Log("directly releasing lock")
+	if err := releaseLockByName(db, name); err != nil {
+		t.Fatalf("cannot forcefully release lock: %v", err)
+	}
+	t.Log(c.Release(l))
+}
