@@ -12,16 +12,17 @@ services:
 
 before_install:
   - go get github.com/mattn/goveralls
-  - docker run -d --name pg95 -p 5495:5432 postgres:9.5
-  - docker run -d --name pg96 -p 5496:5432 postgres:9.6
-  - docker run -d --name pg10 -p 5410:5432 postgres:10
-  - docker run -d --name pg11 -p 5411:5432 postgres:11
-  - docker run -d --name pg12 -p 5412:5432 postgres:12
+  - docker run -d --name pg95 -e POSTGRES_PASSWORD=mysecretpassword -p 5495:5432 postgres:9.5
+  - docker run -d --name pg96 -e POSTGRES_PASSWORD=mysecretpassword -p 5496:5432 postgres:9.6
+  - docker run -d --name pg10 -e POSTGRES_PASSWORD=mysecretpassword -p 5410:5432 postgres:10
+  - docker run -d --name pg11 -e POSTGRES_PASSWORD=mysecretpassword -p 5411:5432 postgres:11
+  - docker run -d --name pg12 -e POSTGRES_PASSWORD=mysecretpassword -p 5412:5432 postgres:12
 
 install: true
 
 script:
   - docker ps -a
+  - docker logs pg12
   - go test -race                                      -v ./... -dsn=postgres://postgres:mysecretpassword@localhost:5412/postgres?sslmode=disable
   - go test                                            -v ./... -dsn=postgres://postgres:mysecretpassword@localhost:5495/postgres?sslmode=disable
   - go test                                            -v ./... -dsn=postgres://postgres:mysecretpassword@localhost:5496/postgres?sslmode=disable
