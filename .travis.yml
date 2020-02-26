@@ -1,5 +1,5 @@
 language: go
-sudo: required
+os: linux
 go_import_path: cirello.io/pglock
 go:
   - "1.13.1"
@@ -12,15 +12,16 @@ services:
 
 before_install:
   - go get github.com/mattn/goveralls
-
-install: true
-
-script:
   - docker run -d --name pg95 -p 5495:5432 postgres:9.5
   - docker run -d --name pg96 -p 5496:5432 postgres:9.6
   - docker run -d --name pg10 -p 5410:5432 postgres:10
   - docker run -d --name pg11 -p 5411:5432 postgres:11
   - docker run -d --name pg12 -p 5412:5432 postgres:12
+
+install: true
+
+script:
+  - docker ps -a
   - go test -race                                      -v ./... -dsn=postgres://postgres:mysecretpassword@localhost:5412/postgres?sslmode=disable
   - go test                                            -v ./... -dsn=postgres://postgres:mysecretpassword@localhost:5495/postgres?sslmode=disable
   - go test                                            -v ./... -dsn=postgres://postgres:mysecretpassword@localhost:5496/postgres?sslmode=disable
