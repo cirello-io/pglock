@@ -76,7 +76,6 @@ func tableInDB(db *sql.DB, tableName string) (bool, error) {
 }
 
 func TestDropTable(t *testing.T) {
-	t.Parallel()
 	db := setupDB(t)
 	defer db.Close()
 	t.Run("default name", func(t *testing.T) {
