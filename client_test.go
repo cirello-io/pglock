@@ -22,6 +22,7 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"flag"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -54,6 +55,108 @@ func setupDB(t *testing.T) *sql.DB {
 	}
 	_ = c.CreateTable()
 	return db
+}
+
+func tableInDB(db *sql.DB, tableName string) (bool, error) {
+	var count int
+	countQuery := `SELECT COUNT(*)
+		FROM INFORMATION_SCHEMA.TABLES
+		where table_name = '` + tableName + `'`
+	row := db.QueryRow(countQuery)
+	err := row.Scan(&count)
+	if err != nil {
+		return false, err
+	}
+
+	if count < 0 || 1 < count {
+		return false, fmt.Errorf("expected count to be 0 or 1")
+	}
+
+	return count == 1, nil
+}
+
+func TestDropTable(t *testing.T) {
+	db := setupDB(t)
+	defer db.Close()
+	t.Run("default name", func(t *testing.T) {
+		c, err := pglock.New(db)
+		if err != nil {
+			t.Fatal("cannot connect:", err)
+		}
+
+		tableName := pglock.DefaultTableName
+		exist, err := tableInDB(db, tableName)
+		if err != nil {
+			t.Fatal("error checking if table exists")
+		}
+		if !exist {
+			t.Fatal("table with name " + tableName + " not found")
+		}
+
+		err = c.DropTable()
+		if err != nil {
+			t.Error("error cleaning up database")
+		}
+
+		exist, err = tableInDB(db, tableName)
+		if err != nil {
+			t.Fatal("error checking if table exists")
+		}
+		if exist {
+			t.Error("table with name " + tableName + " still exists")
+		}
+	})
+
+	t.Run("custom tablename", func(t *testing.T) {
+		tableName := randStr(32)
+		defer func() {
+			db.Exec("DROP TABLE " + tableName)
+		}()
+		c, err := pglock.New(
+			db,
+			pglock.WithLogger(&testLogger{t}),
+			pglock.WithCustomTable(tableName),
+		)
+		if err != nil {
+			t.Fatal("cannot create lock client:", err)
+		}
+		if err := c.CreateTable(); err != nil {
+			t.Fatal("cannot create table:", err)
+		}
+
+		err = c.DropTable()
+		if err != nil {
+			t.Error("error cleaning up database")
+		}
+
+		exist, err := tableInDB(db, tableName)
+		if err != nil {
+			t.Fatal("error checking if table exists")
+		}
+		if exist {
+			t.Error("table with name " + tableName + " still exists")
+		}
+	})
+
+	t.Run("table does not exist", func(t *testing.T) {
+		tableName := randStr(32)
+
+		c, err := pglock.New(
+			db,
+			pglock.WithLogger(&testLogger{t}),
+			pglock.WithCustomTable(tableName),
+		)
+
+		exist, err := tableInDB(db, tableName)
+		if exist {
+			t.Fatal("table with name " + tableName + " already exists")
+		}
+
+		err = c.DropTable()
+		if err == nil {
+			t.Error("did not receive an error dropping a table that does not exist")
+		}
+	})
 }
 
 func TestNew(t *testing.T) {
