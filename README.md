@@ -56,18 +56,21 @@ import (
 func main() {
 	db, err := sql.Open("postgres", *dsn)
 	if err != nil {
-		t.Fatal("cannot connect to test database server:", err)
+		log.Fatal("cannot connect to test database server:", err)
 	}
 	c, err := pglock.New(db,
 		pglock.WithLeaseDuration(3*time.Second),
 		pglock.WithHeartbeatFrequency(1*time.Second),
 	)
 	if err != nil {
-		t.Fatal("cannot create lock client:", err)
+		log.Fatal("cannot create lock client:", err)
+	}
+	if err := c.CreateTable(); err != nil {
+		log.Fatal("cannot create table:", err)
 	}
 	l, err := c.Acquire("lock-name")
 	if err != nil {
-		t.Fatal("unexpected error while acquiring 1st lock:", err)
+		log.Fatal("unexpected error while acquiring 1st lock:", err)
 	}
 	defer l.Close()
 	// execute the logic
