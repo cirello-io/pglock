@@ -21,6 +21,7 @@ import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
+	"errors"
 	"flag"
 	"fmt"
 	"sync"
@@ -29,7 +30,6 @@ import (
 
 	"cirello.io/pglock"
 	"github.com/lib/pq"
-	"golang.org/x/xerrors"
 )
 
 type fakeDriver struct{}
@@ -461,7 +461,7 @@ func TestGet(t *testing.T) {
 		}
 		if _, err := c.GetData(name); err == nil {
 			t.Fatal("expected error not found on loading unknown key")
-		} else if notFound := (&pglock.NotExistError{}); !xerrors.As(err, &notFound) {
+		} else if notFound := (&pglock.NotExistError{}); !errors.As(err, &notFound) {
 			t.Fatal("unexpected error kind found on loading unknown key:", err)
 		} else if err != pglock.ErrLockNotFound {
 			t.Fatal("unexpected error found on loading unknown key:", err)
@@ -738,7 +738,7 @@ func TestDo(t *testing.T) {
 			t.Fatal("cannot grab lock:", err)
 		}
 		err = c.Do(context.Background(), name, func(ctx context.Context, l *pglock.Lock) error {
-			return xerrors.New("should not have been executed")
+			return errors.New("should not have been executed")
 		}, pglock.FailIfLocked())
 		if err != pglock.ErrNotAcquired {
 			t.Fatal("unexpected error while running under lock:", err)
@@ -804,7 +804,7 @@ func releaseLockByName(db *sql.DB, name string) error {
 			}
 		}
 		if err != nil {
-			return xerrors.Errorf("cannot release lock by name: %v", err)
+			return errors.Errorf("cannot release lock by name: %v", err)
 		}
 		return nil
 	}

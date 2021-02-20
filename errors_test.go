@@ -17,34 +17,33 @@ limitations under the License.
 package pglock
 
 import (
+	"errors"
 	"testing"
-
-	"golang.org/x/xerrors"
 )
 
 func TestErrorKind(t *testing.T) {
-	baseErr := xerrors.New("base error")
+	baseErr := errors.New("base error")
 
 	notExistsErr := &NotExistError{baseErr}
-	if !xerrors.Is(notExistsErr, baseErr) {
+	if !errors.Is(notExistsErr, baseErr) {
 		t.Error("cannot unwrap error for NotExistError")
 	}
 	t.Logf("notExistsErr is %q", notExistsErr)
 
 	unavailableErr := &UnavailableError{baseErr}
-	if !xerrors.Is(unavailableErr, baseErr) {
+	if !errors.Is(unavailableErr, baseErr) {
 		t.Error("cannot unwrap error for UnavailableError")
 	}
 	t.Logf("unavailableErr is %q", unavailableErr)
 
 	failedPreconditionErr := &FailedPreconditionError{baseErr}
-	if !xerrors.Is(failedPreconditionErr, baseErr) {
+	if !errors.Is(failedPreconditionErr, baseErr) {
 		t.Error("cannot unwrap error for FailedPreconditionError")
 	}
 	t.Logf("failedPreconditionErr is %q", failedPreconditionErr)
 
 	otherErr := &OtherError{baseErr}
-	if !xerrors.Is(otherErr, baseErr) {
+	if !errors.Is(otherErr, baseErr) {
 		t.Error("cannot unwrap error for OtherError")
 	}
 	t.Logf("otherErr is %q", otherErr)

@@ -17,9 +17,8 @@ limitations under the License.
 package pglock
 
 import (
+	"errors"
 	"fmt"
-
-	"golang.org/x/xerrors"
 )
 
 // NotExistError is an error wrapper that gives the NotExist kind to an error.
@@ -82,22 +81,22 @@ func (err *OtherError) Error() string {
 
 // ErrNotPostgreSQLDriver is returned when an invalid database connection is
 // passed to this locker client.
-var ErrNotPostgreSQLDriver = xerrors.New("this is not a PostgreSQL connection")
+var ErrNotPostgreSQLDriver = errors.New("this is not a PostgreSQL connection")
 
 // ErrNotAcquired indicates the given lock is already enforce to some other
 // client.
-var ErrNotAcquired = xerrors.New("cannot acquire lock")
+var ErrNotAcquired = errors.New("cannot acquire lock")
 
 // ErrLockAlreadyReleased indicates that a release call cannot be fulfilled
 // because the client does not hold the lock
-var ErrLockAlreadyReleased = xerrors.New("lock is already released")
+var ErrLockAlreadyReleased = errors.New("lock is already released")
 
 // ErrLockNotFound is returned for get calls on missing lock entries.
-var ErrLockNotFound = &NotExistError{xerrors.New("lock not found")}
+var ErrLockNotFound = &NotExistError{errors.New("lock not found")}
 
 // Validation errors
 var (
-	ErrDurationTooSmall = xerrors.New("Heartbeat period must be no more than half the length of the Lease Duration, " +
+	ErrDurationTooSmall = errors.New("Heartbeat period must be no more than half the length of the Lease Duration, " +
 		"or locks might expire due to the heartbeat thread taking too long to update them (recommendation is to make it much greater, for example " +
 		"4+ times greater)")
 )

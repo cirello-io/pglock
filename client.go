@@ -19,6 +19,7 @@ package pglock
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -27,7 +28,6 @@ import (
 	"time"
 
 	"github.com/lib/pq"
-	"golang.org/x/xerrors"
 )
 
 // DefaultTableName defines the table which the client is going to use to store
@@ -130,7 +130,7 @@ func (c *Client) CreateTable() error {
 	for _, cmd := range cmds {
 		_, err := c.db.Exec(cmd)
 		if err != nil {
-			return xerrors.Errorf("cannot setup the database: %w", err)
+			return fmt.Errorf("cannot setup the database: %w", err)
 		}
 	}
 	return nil
@@ -141,7 +141,7 @@ func (c *Client) CreateTable() error {
 func (c *Client) DropTable() error {
 	_, err := c.db.Exec("DROP TABLE " + c.tableName)
 	if err != nil {
-		return xerrors.Errorf("cannot cleanup the database: %w", err)
+		return fmt.Errorf("cannot cleanup the database: %w", err)
 	}
 	return nil
 }
@@ -355,7 +355,7 @@ func (c *Client) heartbeat(ctx context.Context, l *Lock) {
 func (c *Client) SendHeartbeat(ctx context.Context, l *Lock) error {
 	err := c.retry(func() error { return c.storeHeartbeat(ctx, l) })
 	if err != nil {
-		return xerrors.Errorf("cannot send heartbeat (%v): %w", l.name, err)
+		return fmt.Errorf("cannot send heartbeat (%v): %w", l.name, err)
 	}
 	return nil
 }
@@ -432,7 +432,7 @@ func (c *Client) GetContext(ctx context.Context, name string) (*Lock, error) {
 		l, err = c.getLock(ctx, name)
 		return err
 	})
-	if notExist := (&NotExistError{}); err != nil && xerrors.As(err, &notExist) {
+	if notExist := (&NotExistError{}); err != nil && errors.As(err, &notExist) {
 		c.log.Println("missing lock entry:", err)
 	}
 	return l, err
@@ -473,7 +473,7 @@ func (c *Client) retry(f func() error) error {
 	var err error
 	for i := 0; i < maxRetries; i++ {
 		err = f()
-		if failedPrecondition := (&FailedPreconditionError{}); err == nil || !xerrors.As(err, &failedPrecondition) {
+		if failedPrecondition := (&FailedPreconditionError{}); err == nil || !errors.As(err, &failedPrecondition) {
 			break
 		}
 		c.log.Println("bad transaction, retrying:", err)
@@ -518,11 +518,11 @@ func typedError(err error, msg string) error {
 	if err == nil {
 		return nil
 	} else if err == sql.ErrNoRows {
-		return &NotExistError{xerrors.Errorf(msg+": %w", err)}
+		return &NotExistError{fmt.Errorf(msg+": %w", err)}
 	} else if _, ok := err.(*net.OpError); ok {
-		return &UnavailableError{xerrors.Errorf(msg+": %w", err)}
+		return &UnavailableError{fmt.Errorf(msg+": %w", err)}
 	} else if e, ok := err.(*pq.Error); ok && e.Code == serializationErrorCode {
-		return &FailedPreconditionError{xerrors.Errorf(msg+": %w", err)}
+		return &FailedPreconditionError{fmt.Errorf(msg+": %w", err)}
 	}
 	return &OtherError{err}
 }
