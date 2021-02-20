@@ -804,7 +804,7 @@ func releaseLockByName(db *sql.DB, name string) error {
 			}
 		}
 		if err != nil {
-			return errors.Errorf("cannot release lock by name: %v", err)
+			return fmt.Errorf("cannot release lock by name: %v", err)
 		}
 		return nil
 	}
