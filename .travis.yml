@@ -23,11 +23,11 @@ install: true
 script:
   - docker ps -a
   - docker logs pg12
-  - go test -race                                      -v ./... -dsn=postgres://postgres:mysecretpassword@localhost:5412/postgres?sslmode=disable
-  - go test                                            -v ./... -dsn=postgres://postgres:mysecretpassword@localhost:5495/postgres?sslmode=disable
-  - go test                                            -v ./... -dsn=postgres://postgres:mysecretpassword@localhost:5496/postgres?sslmode=disable
-  - go test                                            -v ./... -dsn=postgres://postgres:mysecretpassword@localhost:5410/postgres?sslmode=disable
-  - go test                                            -v ./... -dsn=postgres://postgres:mysecretpassword@localhost:5411/postgres?sslmode=disable
-  - go test -covermode=count -coverprofile=profile.cov -v ./... -dsn=postgres://postgres:mysecretpassword@localhost:5412/postgres?sslmode=disable
+  - go test -mod=mod -race                                      -v ./... -dsn=postgres://postgres:mysecretpassword@localhost:5412/postgres?sslmode=disable
+  - go test -mod=mod                                            -v ./... -dsn=postgres://postgres:mysecretpassword@localhost:5495/postgres?sslmode=disable
+  - go test -mod=mod                                            -v ./... -dsn=postgres://postgres:mysecretpassword@localhost:5496/postgres?sslmode=disable
+  - go test -mod=mod                                            -v ./... -dsn=postgres://postgres:mysecretpassword@localhost:5410/postgres?sslmode=disable
+  - go test -mod=mod                                            -v ./... -dsn=postgres://postgres:mysecretpassword@localhost:5411/postgres?sslmode=disable
+  - go test -mod=mod -covermode=count -coverprofile=profile.cov -v ./... -dsn=postgres://postgres:mysecretpassword@localhost:5412/postgres?sslmode=disable
   - $GOPATH/bin/goveralls -coverprofile=profile.cov -service=travis-ci
-  - go test                                               ./... -dsn=postgres://postgres:mysecretpassword@localhost:5412/postgres?sslmode=disable -count=50 -run=TestStress
+  - go test -mod=mod                                               ./... -dsn=postgres://postgres:mysecretpassword@localhost:5412/postgres?sslmode=disable -count=50 -run=TestStress
