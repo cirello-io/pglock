@@ -16,8 +16,6 @@ limitations under the License.
 
 package pglock_test
 
-import "testing"
-
-func TestStress(t *testing.T) {
-	t.Run("testSendHeartbeatRacy", testSendHeartbeatRacy)
+func (s TestWithDB) TestStress() {
+	s.T().Run("testSendHeartbeatRacy", s.testSendHeartbeatRacy)
 }
