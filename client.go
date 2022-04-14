@@ -137,7 +137,7 @@ func (c *Client) CreateTable() error {
 }
 
 // DropTable cleans up a PostgreSQL DB from what was created in the CreateTable
-// function
+// function.
 func (c *Client) DropTable() error {
 	_, err := c.db.Exec("DROP TABLE " + c.tableName)
 	if err != nil {
