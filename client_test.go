@@ -577,8 +577,8 @@ func TestCustomTable(t *testing.T) {
 		if err := c.CreateTable(); err != nil {
 			t.Fatal("cannot create table:", err)
 		}
-		if err := c.CreateTable(); err == nil {
-			t.Fatal("expected error not found")
+		if err := c.CreateTable(); err != nil {
+			t.Fatal("unexpected error on second create table call:", err)
 		}
 	})
 }
