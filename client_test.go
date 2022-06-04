@@ -24,6 +24,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -924,4 +925,57 @@ func TestReleaseLostLock(t *testing.T) {
 		t.Fatalf("cannot forcefully release lock: %v", err)
 	}
 	t.Log(c.Release(l))
+}
+
+func TestIssue29(t *testing.T) {
+	db := setupDB(t)
+	defer db.Close()
+	lockName := randStr(32)
+	c, err := pglock.New(
+		db,
+		pglock.WithLeaseDuration(5*time.Second),
+		pglock.WithHeartbeatFrequency(0),
+	)
+	if err != nil {
+		t.Fatal("cannot create lock client:", err)
+	}
+	var (
+		foundErrMu sync.Mutex
+		foundErr   error
+		wg         sync.WaitGroup
+	)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	for i := 0; i < 100; i++ {
+		wg.Add(1)
+		i := i
+		t.Log("starting", i)
+		go func() {
+			defer wg.Done()
+			defer t.Log("done", i)
+			for {
+				select {
+				case <-ctx.Done():
+					t.Log("test timeout")
+					return
+				default:
+				}
+				t.Log("retrying", i)
+				lock, err := c.Acquire(lockName)
+				if err != nil {
+					if strings.Contains(err.Error(), "could not serialize access due to") {
+						foundErrMu.Lock()
+						foundErr = err
+						foundErrMu.Unlock()
+					}
+					return
+				}
+				lock.Close()
+			}
+		}()
+	}
+	wg.Wait()
+	if foundErr != nil {
+		t.Error("serialization error found", err)
+	}
 }
