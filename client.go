@@ -523,6 +523,20 @@ func typedError(err error, msg string) error {
 		return &UnavailableError{fmt.Errorf(msg+": %w", err)}
 	} else if e, ok := err.(*pq.Error); ok && e.Code == serializationErrorCode {
 		return &FailedPreconditionError{fmt.Errorf(msg+": %w", err)}
+	} else if e, ok := unwrapUntilSQLState(err); ok && e.SQLState() == serializationErrorCode {
+		return &FailedPreconditionError{fmt.Errorf(msg+": %w", err)}
 	}
 	return &OtherError{err}
+}
+
+func unwrapUntilSQLState(err error) (interface{ SQLState() string }, bool) {
+	for {
+		if e, ok := err.(interface{ SQLState() string }); ok {
+			return e, true
+		}
+		err = errors.Unwrap(err)
+		if err == nil {
+			return nil, false
+		}
+	}
 }

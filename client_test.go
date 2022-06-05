@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"cirello.io/pglock"
+	_ "github.com/jackc/pgx/v4/stdlib"
 	"github.com/lib/pq"
 )
 
@@ -46,11 +47,26 @@ func init() {
 var dsn = flag.String("dsn", "postgres://postgres@localhost/postgres?sslmode=disable", "connection string to the test database server")
 
 func setupDB(t *testing.T) *sql.DB {
+	t.Helper()
 	db, err := sql.Open("postgres", *dsn)
 	if err != nil {
 		t.Fatal("cannot connect to test database server:", err)
 	}
 	c, err := pglock.New(db)
+	if err != nil {
+		t.Fatal("cannot connect:", err)
+	}
+	_ = c.CreateTable()
+	return db
+}
+
+func setupCustomDB(t *testing.T, driver string) *sql.DB {
+	t.Helper()
+	db, err := sql.Open(driver, *dsn)
+	if err != nil {
+		t.Fatal("cannot connect to test database server:", err)
+	}
+	c, err := pglock.UnsafeNew(db)
 	if err != nil {
 		t.Fatal("cannot connect:", err)
 	}
@@ -928,54 +944,61 @@ func TestReleaseLostLock(t *testing.T) {
 }
 
 func TestIssue29(t *testing.T) {
-	db := setupDB(t)
-	defer db.Close()
-	lockName := randStr(32)
-	c, err := pglock.New(
-		db,
-		pglock.WithLeaseDuration(5*time.Second),
-		pglock.WithHeartbeatFrequency(0),
-	)
-	if err != nil {
-		t.Fatal("cannot create lock client:", err)
-	}
-	var (
-		foundErrMu sync.Mutex
-		foundErr   error
-		wg         sync.WaitGroup
-	)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	for i := 0; i < 100; i++ {
-		wg.Add(1)
-		i := i
-		t.Log("starting", i)
-		go func() {
-			defer wg.Done()
-			defer t.Log("done", i)
-			for {
-				select {
-				case <-ctx.Done():
-					t.Log("test timeout")
-					return
-				default:
-				}
-				t.Log("retrying", i)
-				lock, err := c.Acquire(lockName)
-				if err != nil {
-					if strings.Contains(err.Error(), "could not serialize access due to") {
-						foundErrMu.Lock()
-						foundErr = err
-						foundErrMu.Unlock()
+	testfunc := func(t *testing.T, db *sql.DB) {
+		t.Helper()
+		lockName := randStr(32)
+		c, err := pglock.UnsafeNew(
+			db,
+			pglock.WithLeaseDuration(5*time.Second),
+			pglock.WithHeartbeatFrequency(0),
+		)
+		if err != nil {
+			t.Fatal("cannot create lock client:", err)
+		}
+		var (
+			foundErrMu sync.Mutex
+			foundErr   error
+			wg         sync.WaitGroup
+		)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		for i := 0; i < 1024; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				for {
+					select {
+					case <-ctx.Done():
+						return
+					default:
 					}
-					return
+					lock, err := c.Acquire(lockName)
+					if err != nil {
+						if strings.Contains(err.Error(), "could not serialize access due to") {
+							foundErrMu.Lock()
+							foundErr = err
+							foundErrMu.Unlock()
+						}
+						return
+					}
+					lock.Close()
 				}
-				lock.Close()
-			}
-		}()
+			}()
+		}
+		wg.Wait()
+		if foundErr != nil {
+			t.Error("serialization error found", foundErr)
+		}
 	}
-	wg.Wait()
-	if foundErr != nil {
-		t.Error("serialization error found", err)
-	}
+	t.Run("lib/pq", func(t *testing.T) {
+		db := setupDB(t)
+		defer db.Close()
+		testfunc(t, db)
+	})
+	t.Run("jackc/pgx", func(t *testing.T) {
+		db := setupCustomDB(t, "pgx")
+		defer db.Close()
+		testfunc(t, db)
+	})
+
 }
