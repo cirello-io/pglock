@@ -24,6 +24,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"math/rand"
 	"strings"
 	"sync"
 	"testing"
@@ -46,7 +47,7 @@ func init() {
 
 var dsn = flag.String("dsn", "postgres://postgres@localhost/postgres?sslmode=disable", "connection string to the test database server")
 
-func setupDB(t *testing.T) *sql.DB {
+func setupDB(t testing.TB) *sql.DB {
 	t.Helper()
 	db, err := sql.Open("postgres", *dsn)
 	if err != nil {
@@ -226,6 +227,7 @@ func TestOpen(t *testing.T) {
 			t.Fatal("got unexpected error when the client was misconfigured")
 		}
 	})
+
 }
 
 func TestFailIfLocked(t *testing.T) {
@@ -1000,5 +1002,88 @@ func TestIssue29(t *testing.T) {
 		defer db.Close()
 		testfunc(t, db)
 	})
+}
 
+func parallelAcquire(t testing.TB, maxConcurrency int) {
+	t.Helper()
+	db := setupDB(t)
+	defer db.Close()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	errCh := make(chan error, maxConcurrency)
+	for i := 0; i < maxConcurrency; i++ {
+		go func(t testing.TB) {
+			c, err := pglock.New(
+				db,
+				pglock.WithLogger(&discardLogging{}),
+				pglock.WithLeaseDuration(5*time.Second),
+				pglock.WithHeartbeatFrequency(1),
+			)
+			if err != nil {
+				err := fmt.Errorf("cannot start lock client: %w", err)
+				select {
+				case errCh <- err:
+				default:
+				}
+				return
+			}
+			name := randStr(32)
+			for {
+				l, err := c.AcquireContext(ctx, name)
+				if err != nil {
+					err := fmt.Errorf("cannot grab the lock (%q): %w", name, err)
+					select {
+					case errCh <- err:
+					default:
+					}
+					return
+				}
+				select {
+				case <-time.After(time.Duration(rand.Intn(30000)) * time.Millisecond):
+					err = c.ReleaseContext(ctx, l)
+					if err != nil {
+						err := fmt.Errorf("cannot grab the lock (%q): %w", name, err)
+						select {
+						case errCh <- err:
+						default:
+						}
+						return
+					}
+				case <-ctx.Done():
+					return
+				}
+			}
+		}(t)
+	}
+	t.Log("all clients triggered")
+	select {
+	case <-time.After(10 * time.Second):
+		cancel()
+	case <-ctx.Done():
+		return
+	case err := <-errCh:
+		// If the context is cancelled its likely we will get a lot of
+		// errors of in flight operations. We don't care about those so
+		// we will not Fail on any error that occured after context
+		// cancellation
+		if ctx.Err() != nil {
+			return
+		}
+		cancel()
+		t.Error("trapped error:", err)
+		t.Log("draining errors:")
+		for err := range errCh {
+			t.Error("drained error:", err)
+		}
+	}
+}
+
+func TestParallelAcquire(t *testing.T) {
+	parallelAcquire(t, 100)
+}
+
+func BenchmarkParallelAcquire(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		parallelAcquire(b, i)
+	}
 }

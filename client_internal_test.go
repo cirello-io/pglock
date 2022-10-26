@@ -62,7 +62,7 @@ func TestRetry(t *testing.T) {
 			&FailedPreconditionError{errors.New("failed precondition")},
 			&OtherError{errors.New("other error")},
 		}
-		err := c.retry(func() error {
+		err := c.retry(context.Background(), func() error {
 			var err error
 			err, errs = errs[0], errs[1:]
 			return err
@@ -76,7 +76,7 @@ func TestRetry(t *testing.T) {
 			log: log.New(ioutil.Discard, "", 0),
 		}
 		var retries int
-		err := c.retry(func() error {
+		err := c.retry(context.Background(), func() error {
 			retries++
 			return &FailedPreconditionError{errors.New("failed precondition")}
 		})
@@ -118,6 +118,7 @@ func TestDBErrorHandling(t *testing.T) {
 		t.Run("bad tx", func(t *testing.T) {
 			client, mock, _ := setup()
 			badTx := errors.New("transaction begin error")
+			mock.ExpectQuery(`SELECT nextval\('locks_rvn'\)`).WillReturnRows(sqlmock.NewRows([]string{"nextval"}).AddRow(1))
 			mock.ExpectBegin().WillReturnError(badTx)
 			if _, err := client.Acquire("bad-tx"); !errors.Is(err, badTx) {
 				t.Errorf("expected tx error missing: %v", err)
@@ -126,7 +127,6 @@ func TestDBErrorHandling(t *testing.T) {
 		t.Run("bad rvn", func(t *testing.T) {
 			client, mock, _ := setup()
 			badRVN := errors.New("cannot load next RVN")
-			mock.ExpectBegin()
 			mock.ExpectQuery(`SELECT nextval\('locks_rvn'\)`).WillReturnError(badRVN)
 			if _, err := client.Acquire("bad-rvn"); !errors.Is(err, badRVN) {
 				t.Errorf("expected RVN error missing: %v", err)
@@ -135,8 +135,8 @@ func TestDBErrorHandling(t *testing.T) {
 		t.Run("bad insert", func(t *testing.T) {
 			client, mock, _ := setup()
 			badInsert := errors.New("cannot insert")
-			mock.ExpectBegin()
 			mock.ExpectQuery(`SELECT nextval\('locks_rvn'\)`).WillReturnRows(sqlmock.NewRows([]string{"nextval"}).AddRow(1))
+			mock.ExpectBegin()
 			mock.ExpectExec(`INSERT INTO locks (.+)`).WillReturnError(badInsert)
 			if _, err := client.Acquire("bad-insert"); !errors.Is(err, badInsert) {
 				t.Errorf("expected RVN error missing: %v", err)
@@ -145,8 +145,8 @@ func TestDBErrorHandling(t *testing.T) {
 		t.Run("bad RVN confirmation", func(t *testing.T) {
 			client, mock, _ := setup()
 			badRVN := errors.New("cannot confirm RVN")
-			mock.ExpectBegin()
 			mock.ExpectQuery(`SELECT nextval\('locks_rvn'\)`).WillReturnRows(sqlmock.NewRows([]string{"nextval"}).AddRow(1))
+			mock.ExpectBegin()
 			mock.ExpectExec(`INSERT INTO locks (.+)`).WillReturnResult(sqlmock.NewResult(0, 1))
 			mock.ExpectQuery(`SELECT "record_version_number", "data", "owner" FROM locks WHERE name = (.+)`).WillReturnError(badRVN)
 			if _, err := client.Acquire("bad-insert"); !errors.Is(err, badRVN) {
@@ -156,8 +156,8 @@ func TestDBErrorHandling(t *testing.T) {
 		t.Run("bad commit", func(t *testing.T) {
 			client, mock, _ := setup()
 			badCommit := errors.New("cannot confirm RVN")
-			mock.ExpectBegin()
 			mock.ExpectQuery(`SELECT nextval\('locks_rvn'\)`).WillReturnRows(sqlmock.NewRows([]string{"nextval"}).AddRow(1))
+			mock.ExpectBegin()
 			mock.ExpectExec(`INSERT INTO locks (.+)`).WillReturnResult(sqlmock.NewResult(0, 1))
 			mock.ExpectQuery(`SELECT "record_version_number", "data", "owner" FROM locks WHERE name = (.+)`).WillReturnRows(
 				sqlmock.NewRows([]string{
@@ -225,6 +225,7 @@ func TestDBErrorHandling(t *testing.T) {
 		t.Run("bad tx", func(t *testing.T) {
 			client, mock, fakeLock := setup()
 			badTx := errors.New("transaction begin error")
+			mock.ExpectQuery(`SELECT nextval\('locks_rvn'\)`).WillReturnRows(sqlmock.NewRows([]string{"nextval"}).AddRow(1))
 			mock.ExpectBegin().WillReturnError(badTx)
 			if err := client.SendHeartbeat(context.Background(), fakeLock); !errors.Is(err, badTx) {
 				t.Errorf("expected tx error missing: %v", err)
@@ -236,7 +237,6 @@ func TestDBErrorHandling(t *testing.T) {
 		t.Run("bad rvn", func(t *testing.T) {
 			client, mock, fakeLock := setup()
 			badRVN := errors.New("cannot load next RVN")
-			mock.ExpectBegin()
 			mock.ExpectQuery(`SELECT nextval\('locks_rvn'\)`).WillReturnError(badRVN)
 			if err := client.SendHeartbeat(context.Background(), fakeLock); !errors.Is(err, badRVN) {
 				t.Errorf("expected RVN error missing: %v", err)
@@ -248,8 +248,8 @@ func TestDBErrorHandling(t *testing.T) {
 		t.Run("bad insert", func(t *testing.T) {
 			client, mock, fakeLock := setup()
 			badUpdate := errors.New("cannot insert")
-			mock.ExpectBegin()
 			mock.ExpectQuery(`SELECT nextval\('locks_rvn'\)`).WillReturnRows(sqlmock.NewRows([]string{"nextval"}).AddRow(1))
+			mock.ExpectBegin()
 			mock.ExpectExec(`UPDATE locks (.+)`).WillReturnError(badUpdate)
 			if err := client.SendHeartbeat(context.Background(), fakeLock); !errors.Is(err, badUpdate) {
 				t.Errorf("expected RVN error missing: %v", err)
@@ -261,8 +261,8 @@ func TestDBErrorHandling(t *testing.T) {
 		t.Run("bad RVN confirmation", func(t *testing.T) {
 			client, mock, fakeLock := setup()
 			badRVN := errors.New("cannot confirm RVN")
-			mock.ExpectBegin()
 			mock.ExpectQuery(`SELECT nextval\('locks_rvn'\)`).WillReturnRows(sqlmock.NewRows([]string{"nextval"}).AddRow(1))
+			mock.ExpectBegin()
 			mock.ExpectExec(`UPDATE locks (.+)`).WillReturnResult(sqlmock.NewErrorResult(badRVN))
 			if err := client.SendHeartbeat(context.Background(), fakeLock); !errors.Is(err, badRVN) {
 				t.Errorf("expected RVN confirmation error missing: %v", err)
@@ -274,8 +274,8 @@ func TestDBErrorHandling(t *testing.T) {
 		t.Run("bad commit", func(t *testing.T) {
 			client, mock, fakeLock := setup()
 			badCommit := errors.New("cannot confirm RVN")
-			mock.ExpectBegin()
 			mock.ExpectQuery(`SELECT nextval\('locks_rvn'\)`).WillReturnRows(sqlmock.NewRows([]string{"nextval"}).AddRow(1))
+			mock.ExpectBegin()
 			mock.ExpectExec(`UPDATE locks (.+)`).WillReturnResult(sqlmock.NewResult(0, 1))
 			mock.ExpectCommit().WillReturnError(badCommit)
 			if err := client.SendHeartbeat(context.Background(), fakeLock); !errors.Is(err, badCommit) {

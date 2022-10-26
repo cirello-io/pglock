@@ -45,3 +45,7 @@ func (t *testLogger) Println(v ...interface{}) {
 	t.t.Helper()
 	t.t.Log(v...)
 }
+
+type discardLogging struct{}
+
+func (t *discardLogging) Println(...interface{}) {}
