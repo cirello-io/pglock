@@ -162,13 +162,17 @@ func (c *Client) AcquireContext(ctx context.Context, name string, opts ...LockOp
 		case <-ctx.Done():
 			return nil, ErrNotAcquired
 		default:
-			err := c.retry(func() error { return c.tryAcquire(ctx, l) })
+			err := c.retry(ctx, func() error { return c.tryAcquire(ctx, l) })
 			if l.failIfLocked && err == ErrNotAcquired {
 				c.log.Println("not acquired, exit")
 				return l, err
 			} else if err == ErrNotAcquired {
 				c.log.Println("not acquired, wait:", l.leaseDuration)
-				time.Sleep(l.leaseDuration)
+				select {
+				case <-time.After(l.leaseDuration):
+				case <-ctx.Done():
+					return l, err
+				}
 				continue
 			} else if err != nil {
 				c.log.Println("error:", err)
@@ -197,13 +201,15 @@ func (c *Client) tryAcquire(ctx context.Context, l *Lock) error {
 func (c *Client) storeAcquire(ctx context.Context, l *Lock) error {
 	ctx, cancel := context.WithTimeout(ctx, l.leaseDuration)
 	defer cancel()
+
+	rvn, err := c.getNextRVN(ctx, c.db)
+	if err != nil {
+		return typedError(err, "cannot run query to read record version number")
+	}
+
 	tx, err := c.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
 	if err != nil {
 		return typedError(err, "cannot create transaction for lock acquisition")
-	}
-	rvn, err := c.getNextRVN(ctx, tx)
-	if err != nil {
-		return typedError(err, "cannot run query to read record version number")
 	}
 	c.log.Println("storeAcquire in", l.name, rvn, l.data, l.recordVersionNumber)
 	defer func() {
@@ -280,7 +286,7 @@ func (c *Client) ReleaseContext(ctx context.Context, l *Lock) error {
 		l.heartbeatWG.Wait()
 		return ErrLockAlreadyReleased
 	}
-	err := c.retry(func() error { return c.storeRelease(ctx, l) })
+	err := c.retry(ctx, func() error { return c.storeRelease(ctx, l) })
 	if l.IsReleased() {
 		l.heartbeatWG.Wait()
 	}
@@ -346,14 +352,18 @@ func (c *Client) heartbeat(ctx context.Context, l *Lock) {
 			defer c.log.Println("heartbeat missed", err)
 			return
 		}
-		time.Sleep(c.heartbeatFrequency)
+		select {
+		case <-time.After(c.heartbeatFrequency):
+		case <-ctx.Done():
+			return
+		}
 	}
 }
 
 // SendHeartbeat refreshes the mutex entry so to avoid other clients from
 // grabbing it.
 func (c *Client) SendHeartbeat(ctx context.Context, l *Lock) error {
-	err := c.retry(func() error { return c.storeHeartbeat(ctx, l) })
+	err := c.retry(ctx, func() error { return c.storeHeartbeat(ctx, l) })
 	if err != nil {
 		return fmt.Errorf("cannot send heartbeat (%v): %w", l.name, err)
 	}
@@ -365,15 +375,17 @@ func (c *Client) storeHeartbeat(ctx context.Context, l *Lock) error {
 	defer l.mu.Unlock()
 	ctx, cancel := context.WithTimeout(ctx, l.leaseDuration)
 	defer cancel()
+
+	rvn, err := c.getNextRVN(ctx, c.db)
+	if err != nil {
+		l.isReleased = true
+		return typedError(err, "cannot run query to read record version number")
+	}
+
 	tx, err := c.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
 	if err != nil {
 		l.isReleased = true
 		return typedError(err, "cannot create transaction for lock acquisition")
-	}
-	rvn, err := c.getNextRVN(ctx, tx)
-	if err != nil {
-		l.isReleased = true
-		return typedError(err, "cannot run query to read record version number")
 	}
 	result, err := tx.ExecContext(ctx, `
 		UPDATE
@@ -427,7 +439,7 @@ func (c *Client) GetDataContext(ctx context.Context, name string) ([]byte, error
 // holding it first.
 func (c *Client) GetContext(ctx context.Context, name string) (*Lock, error) {
 	var l *Lock
-	err := c.retry(func() error {
+	err := c.retry(ctx, func() error {
 		var err error
 		l, err = c.getLock(ctx, name)
 		return err
@@ -460,8 +472,8 @@ func (c *Client) getLock(ctx context.Context, name string) (*Lock, error) {
 	return l, typedError(err, "cannot load the data of this lock")
 }
 
-func (c *Client) getNextRVN(ctx context.Context, tx *sql.Tx) (int64, error) {
-	rowRVN := tx.QueryRowContext(ctx, `SELECT nextval('`+c.tableName+`_rvn')`)
+func (c *Client) getNextRVN(ctx context.Context, db *sql.DB) (int64, error) {
+	rowRVN := db.QueryRowContext(ctx, `SELECT nextval('`+c.tableName+`_rvn')`)
 	var rvn int64
 	err := rowRVN.Scan(&rvn)
 	return rvn, err
@@ -469,7 +481,7 @@ func (c *Client) getNextRVN(ctx context.Context, tx *sql.Tx) (int64, error) {
 
 const maxRetries = 1024
 
-func (c *Client) retry(f func() error) error {
+func (c *Client) retry(ctx context.Context, f func() error) error {
 	var err error
 	for i := 0; i < maxRetries; i++ {
 		err = f()
@@ -477,7 +489,11 @@ func (c *Client) retry(f func() error) error {
 			break
 		}
 		c.log.Println("bad transaction, retrying:", err)
-		time.Sleep(c.heartbeatFrequency)
+		select {
+		case <-time.After(c.heartbeatFrequency):
+		case <-ctx.Done():
+			return err
+		}
 	}
 	return err
 }

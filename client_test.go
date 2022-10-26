@@ -24,6 +24,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"math/rand"
 	"strings"
 	"sync"
 	"testing"
@@ -226,6 +227,7 @@ func TestOpen(t *testing.T) {
 			t.Fatal("got unexpected error when the client was misconfigured")
 		}
 	})
+
 }
 
 func TestFailIfLocked(t *testing.T) {
@@ -1001,4 +1003,72 @@ func TestIssue29(t *testing.T) {
 		testfunc(t, db)
 	})
 
+}
+
+const NUM_CONCURRENT = 300
+
+func TestParallelAcquire(t *testing.T) {
+	db := setupDB(t)
+	defer db.Close()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	errCh := make(chan error)
+	for i := 0; i < NUM_CONCURRENT; i++ {
+		go func(t *testing.T) {
+			name := randStr(32)
+			c, err := pglock.New(
+				db,
+				pglock.WithLogger(&testLogger{t}),
+				pglock.WithLeaseDuration(5*time.Second),
+				pglock.WithHeartbeatFrequency(1),
+			)
+			if err != nil {
+				select {
+				case errCh <- err:
+				default:
+				}
+				return
+			}
+			for {
+				l, err := c.AcquireContext(ctx, name)
+				if err != nil {
+					select {
+					case errCh <- err:
+					default:
+					}
+					return
+				}
+				select {
+				case <-time.After(time.Duration(rand.Intn(30000)) * time.Millisecond):
+					err = c.ReleaseContext(ctx, l)
+					if err != nil {
+						select {
+						case errCh <- err:
+						default:
+						}
+						return
+					}
+				case <-ctx.Done():
+					return
+				}
+			}
+		}(t)
+	}
+	select {
+	case <-time.After(60 * time.Second):
+		cancel()
+	case <-ctx.Done():
+		return
+	case err := <-errCh:
+		//If the context is cancelled its likely we will get
+		//a lot of errors of in flight operations. We don't care about those
+		//so we will not Fail on any error that occured after context cancellation
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			t.Fatal("Unexpected Error:", err)
+			cancel()
+		}
+	}
 }
