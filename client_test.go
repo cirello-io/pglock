@@ -1081,9 +1081,3 @@ func parallelAcquire(t testing.TB, maxConcurrency int) {
 func TestParallelAcquire(t *testing.T) {
 	parallelAcquire(t, 100)
 }
-
-func BenchmarkParallelAcquire(b *testing.B) {
-	for i := 0; i < b.N; i++ {
-		parallelAcquire(b, i)
-	}
-}
