@@ -119,13 +119,13 @@ func (c *Client) newLock(ctx context.Context, name string, opts []LockOption) *L
 // by this lock client. If the table already exists, it will return an error.
 func (c *Client) CreateTable() error {
 	cmds := []string{
-		`CREATE TABLE ` + c.tableName + ` (
+		`CREATE TABLE IF NOT EXISTS ` + c.tableName + ` (
 			name CHARACTER VARYING(255) PRIMARY KEY,
 			record_version_number BIGINT,
 			data BYTEA,
 			owner CHARACTER VARYING(255)
 		);`,
-		`CREATE SEQUENCE ` + c.tableName + `_rvn OWNED BY ` + c.tableName + `.record_version_number`,
+		`CREATE SEQUENCE IF NOT EXISTS ` + c.tableName + `_rvn OWNED BY ` + c.tableName + `.record_version_number`,
 	}
 	for _, cmd := range cmds {
 		_, err := c.db.Exec(cmd)
