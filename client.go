@@ -266,8 +266,11 @@ func (c *Client) Do(ctx context.Context, name string, f func(context.Context, *L
 		return err
 	}
 	defer l.Close()
-	defer l.heartbeatCancel()
 	go func() {
+		// In the hierarchy of context cancelations, it might be the
+		// case that the heartbeat context has been canceled, even
+		// though the parent is still intact. This trap will bubble
+		// children cancellations up.
 		<-l.heartbeatContext.Done()
 		cancel()
 	}()
@@ -373,6 +376,11 @@ func (c *Client) SendHeartbeat(ctx context.Context, l *Lock) error {
 func (c *Client) storeHeartbeat(ctx context.Context, l *Lock) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
+
+	if l.isReleased {
+		return ErrLockAlreadyReleased
+	}
+
 	ctx, cancel := context.WithTimeout(ctx, l.leaseDuration)
 	defer cancel()
 
