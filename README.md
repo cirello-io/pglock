@@ -1,7 +1,6 @@
 # PostgreSQL Lock Client for Go
 
 [![GoDoc](https://godoc.org/cirello.io/pglock?status.svg)](https://godoc.org/cirello.io/pglock)
-[![Build status](https://badge.buildkite.com/1429095bfa71e2f396287764073bb4a78bb83a73c12c281e85.svg)](https://buildkite.com/cirello-io/pglock)
 [![Coverage Status](https://coveralls.io/repos/github/cirello-io/pglock/badge.svg?branch=master)](https://coveralls.io/github/cirello-io/pglock?branch=master)
 [![Go Report Card](https://goreportcard.com/badge/github.com/cirello-io/pglock)](https://goreportcard.com/report/github.com/cirello-io/pglock)
 [![Mentioned in Awesome Go](https://awesome.re/mentioned-badge.svg)](https://github.com/avelino/awesome-go)
