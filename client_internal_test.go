@@ -286,4 +286,38 @@ func TestDBErrorHandling(t *testing.T) {
 			}
 		})
 	})
+
+	t.Run("GetAllLocks", func(t *testing.T) {
+		t.Run("bad query", func(t *testing.T) {
+			client, mock, _ := setup()
+			badQuery := errors.New("cannot run query")
+			mock.ExpectQuery(`SELECT "name", "owner", "data"`).WillReturnError(badQuery)
+			_, err := client.GetAllLocksContext(context.Background())
+			if !errors.Is(err, badQuery) {
+				t.Errorf("expected error missing: %v", err)
+			}
+		})
+		t.Run("bad row scan", func(t *testing.T) {
+			client, mock, _ := setup()
+			rows := sqlmock.NewRows([]string{"name"}).
+				AddRow(1)
+			mock.ExpectQuery(`SELECT "name", "owner", "data"`).WillReturnRows(rows)
+			_, err := client.GetAllLocksContext(context.Background())
+			if err == nil {
+				t.Errorf("expected error missing: %v", err)
+			}
+		})
+		t.Run("bad scan", func(t *testing.T) {
+			client, mock, _ := setup()
+			badScan := errors.New("bad Scan")
+			rows := sqlmock.NewRows([]string{"name", "owner", "data"}).
+				AddRow("name", "owner", "data").
+				RowError(0, badScan)
+			mock.ExpectQuery(`SELECT "name", "owner", "data"`).WillReturnRows(rows)
+			_, err := client.GetAllLocksContext(context.Background())
+			if !errors.Is(err, badScan) {
+				t.Errorf("expected error missing: %v", err)
+			}
+		})
+	})
 }

@@ -1081,3 +1081,55 @@ func parallelAcquire(t testing.TB, maxConcurrency int) {
 func TestParallelAcquire(t *testing.T) {
 	parallelAcquire(t, 100)
 }
+
+func TestGetAllLocks(t *testing.T) {
+	t.Parallel()
+	db, err := sql.Open("postgres", *dsn)
+	if err != nil {
+		t.Fatal("cannot connect to test database server:", err)
+	}
+	const expectedOwner = "owner"
+	c, err := pglock.New(
+		db,
+		pglock.WithCustomTable("getAllLocks"),
+		pglock.WithHeartbeatFrequency(0),
+		pglock.WithLogger(&discardLogging{}),
+		pglock.WithOwner(expectedOwner),
+	)
+	if err != nil {
+		t.Fatal("cannot connect:", err)
+	}
+	defer db.Close()
+	_ = c.CreateTable()
+	defer c.DropTable()
+	names := make(map[string]struct{})
+	expected := []byte("42")
+	for i := 0; i < 5; i++ {
+		name := randStr(32)
+		if _, err := c.Acquire(name, pglock.WithData(expected)); err != nil {
+			t.Fatal("unexpected error while acquiring lock:", err)
+		}
+		names[name] = struct{}{}
+	}
+	t.Logf("%#v", names)
+	locks, err := c.GetAllLocks()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, l := range locks {
+		t.Log(l.Name(), l.Owner(), string(l.Data()))
+		if l.Owner() != expectedOwner {
+			t.Error("mismatched owner:", l.Owner())
+		}
+		if _, ok := names[l.Name()]; !ok {
+			t.Error("unknown lock name:", l.Name())
+		}
+		delete(names, l.Name())
+		if !bytes.Equal(expected, l.Data()) {
+			t.Error("missing expected data")
+		}
+		if t.Failed() {
+			break
+		}
+	}
+}

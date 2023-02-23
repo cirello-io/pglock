@@ -121,3 +121,21 @@ func ReplaceData() LockOption {
 		l.replaceData = true
 	}
 }
+
+// ReadOnlyLock holds a copy of the information of a lock in the database.
+type ReadOnlyLock Lock
+
+// Name returns the lock's name.
+func (l *ReadOnlyLock) Name() string {
+	return l.name
+}
+
+// Data returns the content of the lock, if any is available.
+func (l *ReadOnlyLock) Data() []byte {
+	return l.data
+}
+
+// Owner returns who currently owns the lock.
+func (l *ReadOnlyLock) Owner() string {
+	return l.owner
+}

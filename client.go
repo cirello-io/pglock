@@ -506,6 +506,44 @@ func (c *Client) retry(ctx context.Context, f func() error) error {
 	return err
 }
 
+// GetAllLocks returns all known locks in a read-only fashion.
+func (c *Client) GetAllLocks() ([]*ReadOnlyLock, error) {
+	return c.GetAllLocksContext(context.Background())
+}
+
+// GetAllLocksContext returns all known locks in a read-only fashion.
+func (c *Client) GetAllLocksContext(ctx context.Context) ([]*ReadOnlyLock, error) {
+	var locks []*ReadOnlyLock
+	err := c.retry(ctx, func() error {
+		var err error
+		locks, err = c.getAllLocks(ctx)
+		return err
+	})
+	return locks, err
+}
+
+func (c *Client) getAllLocks(ctx context.Context) ([]*ReadOnlyLock, error) {
+	ctx, cancel := context.WithTimeout(ctx, c.leaseDuration)
+	defer cancel()
+	rows, err := c.db.QueryContext(ctx, `SELECT "name", "owner", "data" FROM `+c.tableName)
+	if err != nil {
+		return nil, typedError(err, "cannot query all locks")
+	}
+	defer rows.Close()
+	var locks []*ReadOnlyLock
+	for rows.Next() {
+		lock := &ReadOnlyLock{}
+		if err := rows.Scan(&lock.name, &lock.owner, &lock.data); err != nil {
+			return nil, typedError(err, "cannot scan row")
+		}
+		locks = append(locks, lock)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, typedError(err, "failed to scan rows")
+	}
+	return locks, nil
+}
+
 // ClientOption reconfigures the lock client
 type ClientOption func(*Client)
 
