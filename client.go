@@ -25,6 +25,8 @@ import (
 	"log"
 	"math/rand"
 	"net"
+	"strings"
+	"text/template"
 	"time"
 
 	"github.com/lib/pq"
@@ -115,21 +117,41 @@ func (c *Client) newLock(ctx context.Context, name string, opts []LockOption) *L
 	return l
 }
 
+var cmds = []*template.Template{
+	template.Must(template.New("createTable").Parse(`
+	CREATE TABLE {{.Modifier}} {{.TableName}} (
+		name CHARACTER VARYING(255) PRIMARY KEY,
+		record_version_number BIGINT,
+		data BYTEA,
+		owner CHARACTER VARYING(255)
+	);`)),
+	template.Must(template.New("createSequence").Parse(`CREATE SEQUENCE {{.Modifier}} {{.TableName}}_rvn OWNED BY {{.TableName}}.record_version_number`)),
+}
+
 // CreateTable prepares a PostgreSQL table with the right DDL for it to be used
 // by this lock client. If the table already exists, it will return an error.
 func (c *Client) CreateTable() error {
-	cmds := []string{
-		`CREATE TABLE ` + c.tableName + ` (
-			name CHARACTER VARYING(255) PRIMARY KEY,
-			record_version_number BIGINT,
-			data BYTEA,
-			owner CHARACTER VARYING(255)
-		);`,
-		`CREATE SEQUENCE ` + c.tableName + `_rvn OWNED BY ` + c.tableName + `.record_version_number`,
-	}
+	values := createTableTemplateValue{TableName: c.tableName, Modifier: ""}
+	return c.createTable(values)
+}
+
+// TryCreateTable prepares a PostgreSQL table with the right DDL for it to be
+// used by this lock client. If the table already exists, it will be a no-op
+func (c *Client) TryCreateTable() error {
+	values := createTableTemplateValue{TableName: c.tableName, Modifier: "IF NOT EXISTS"}
+	return c.createTable(values)
+}
+
+type createTableTemplateValue struct {
+	TableName string
+	Modifier  string
+}
+
+func (c *Client) createTable(values createTableTemplateValue) error {
 	for _, cmd := range cmds {
-		_, err := c.db.Exec(cmd)
-		if err != nil {
+		var qry strings.Builder
+		cmd.Execute(&qry, values)
+		if _, err := c.db.Exec(qry.String()); err != nil {
 			return fmt.Errorf("cannot setup the database: %w", err)
 		}
 	}

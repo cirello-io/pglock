@@ -602,6 +602,56 @@ func TestCustomTable(t *testing.T) {
 	})
 }
 
+func TestCustomTableIdemPotent(t *testing.T) {
+	t.Parallel()
+	db := setupDB(t)
+	defer db.Close()
+	t.Run("happy path", func(t *testing.T) {
+		tableName := randStr(32)
+		defer func() {
+			db.Exec("DROP TABLE " + tableName)
+		}()
+		name := randStr(32)
+		c, err := pglock.New(
+			db,
+			pglock.WithLogger(&testLogger{t}),
+			pglock.WithCustomTable(tableName),
+		)
+		if err != nil {
+			t.Fatal("cannot create lock client:", err)
+		}
+		if err := c.CreateTable(); err != nil {
+			t.Fatal("cannot create table:", err)
+		}
+		l1, err := c.Acquire(name)
+		if err != nil {
+			t.Fatal("unexpected error while acquiring lock:", err)
+		}
+		defer l1.Close()
+		t.Log("first lock stored")
+	})
+	t.Run("duplicated call", func(t *testing.T) {
+		tableName := randStr(32)
+		defer func() {
+			db.Exec("DROP TABLE " + tableName)
+		}()
+		c, err := pglock.New(
+			db,
+			pglock.WithLogger(&testLogger{t}),
+			pglock.WithCustomTable(tableName),
+		)
+		if err != nil {
+			t.Fatal("cannot create lock client:", err)
+		}
+		if err := c.CreateTable(); err != nil {
+			t.Fatal("cannot create table:", err)
+		}
+		if err := c.TryCreateTable(); err != nil {
+			t.Fatal("unexpected error not found:", err)
+		}
+	})
+}
+
 func TestCanceledContext(t *testing.T) {
 	db := setupDB(t)
 	defer db.Close()
