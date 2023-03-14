@@ -39,9 +39,9 @@ This package has the `go.mod` file to be used with Go's module system. If you
 need to work on this package, use `go mod edit -replace=cirello.io/pglock@yourlocalcopy`.
 
 For your convenience, there is a function in the package called `CreateTable`
-that you can use to set up your table. The package level documentation comment
-has an example of how to use this package. Here is some example code to get you
-started:
+that you can use to set up your table, or you may use the schema.sql file.
+The package level documentation comment has an example of how to use this
+package. Here is some example code to get you started:
 
 ```Go
 package main

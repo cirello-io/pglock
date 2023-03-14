@@ -117,14 +117,13 @@ func (c *Client) newLock(ctx context.Context, name string, opts []LockOption) *L
 	return l
 }
 
-var cmds = []*template.Template{
-	template.Must(template.New("createTable").Parse(`
-	CREATE TABLE {{.Modifier}} {{.TableName}} (
-		name CHARACTER VARYING(255) PRIMARY KEY,
-		record_version_number BIGINT,
-		data BYTEA,
-		owner CHARACTER VARYING(255)
-	);`)),
+var createTableSchemaCommands = []*template.Template{
+	template.Must(template.New("createTable").Parse(`CREATE TABLE {{.Modifier}} {{.TableName}} (
+	name CHARACTER VARYING(255) PRIMARY KEY,
+	record_version_number BIGINT,
+	data BYTEA,
+	owner CHARACTER VARYING(255)
+)`)),
 	template.Must(template.New("createSequence").Parse(`CREATE SEQUENCE {{.Modifier}} {{.TableName}}_rvn OWNED BY {{.TableName}}.record_version_number`)),
 }
 
@@ -148,7 +147,7 @@ type createTableTemplateValue struct {
 }
 
 func (c *Client) createTable(values createTableTemplateValue) error {
-	for _, cmd := range cmds {
+	for _, cmd := range createTableSchemaCommands {
 		var qry strings.Builder
 		cmd.Execute(&qry, values)
 		if _, err := c.db.Exec(qry.String()); err != nil {
