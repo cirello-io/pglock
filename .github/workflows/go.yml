@@ -33,4 +33,12 @@ jobs:
         go-version: 'stable'
 
     - name: Test
-      run: go test -short -v -dsn="postgres://postgres:everyone@localhost:5432/postgres?sslmode=disable"
+      run: |
+        go test -coverprofile=coverage.out -shuffle on -short -v -dsn="postgres://postgres:everyone@localhost:5432/postgres?sslmode=disable"
+        go tool cover -html=coverage.out -o coverage.html
+
+    - name: Upload coverage
+      uses: actions/upload-artifact@v3
+      with:
+        name: coverage
+        path: coverage.html
