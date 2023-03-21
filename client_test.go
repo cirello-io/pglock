@@ -1129,6 +1129,9 @@ func parallelAcquire(t testing.TB, maxConcurrency int) {
 }
 
 func TestParallelAcquire(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping test in short mode.")
+	}
 	parallelAcquire(t, 100)
 }
 

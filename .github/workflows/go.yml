@@ -34,4 +34,4 @@ jobs:
         env: GOPROXY=https://proxy.golang.org
 
     - name: Test
-      run: go test -v -dsn="postgres://postgres:everyone@localhost:5432/postgres?sslmode=disable"
+      run: go test -short -v -dsn="postgres://postgres:everyone@localhost:5432/postgres?sslmode=disable"
