@@ -8,11 +8,14 @@ on:
 
 jobs:
   build:
+    strategy:
+      matrix:
+        postgres-version: [15, 14, 13, 12, 11]
     runs-on: ubuntu-latest
 
     services:
       postgres:
-        image: postgres:15
+        image: postgres:${{ matrix.postgres-version }}
         ports:
           - "5432:5432"
         env:
