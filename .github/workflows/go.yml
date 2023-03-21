@@ -31,7 +31,6 @@ jobs:
       uses: actions/setup-go@v4
       with:
         go-version: 'stable'
-        env: GOPROXY=https://proxy.golang.org
 
     - name: Test
       run: go test -short -v -dsn="postgres://postgres:everyone@localhost:5432/postgres?sslmode=disable"
