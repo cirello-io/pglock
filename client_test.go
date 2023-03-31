@@ -47,13 +47,13 @@ func init() {
 
 var dsn = flag.String("dsn", "postgres://postgres@localhost/postgres?sslmode=disable", "connection string to the test database server")
 
-func setupDB(t testing.TB) *sql.DB {
+func setupDB(t testing.TB, options ...pglock.ClientOption) *sql.DB {
 	t.Helper()
 	db, err := sql.Open("postgres", *dsn)
 	if err != nil {
 		t.Fatal("cannot connect to test database server:", err)
 	}
-	c, err := pglock.New(db)
+	c, err := pglock.New(db, options...)
 	if err != nil {
 		t.Fatal("cannot connect:", err)
 	}
@@ -417,9 +417,9 @@ func TestAcquire(t *testing.T) {
 
 func TestGet(t *testing.T) {
 	t.Parallel()
-	db := setupDB(t)
-	defer db.Close()
 	t.Run("happy path - data", func(t *testing.T) {
+		db := setupDB(t, pglock.WithCustomTable("TestGetHappyPathData"))
+		defer db.Close()
 		name := randStr(32)
 		c, err := pglock.New(
 			db,
@@ -443,6 +443,8 @@ func TestGet(t *testing.T) {
 		}
 	})
 	t.Run("happy path - lock", func(t *testing.T) {
+		db := setupDB(t, pglock.WithCustomTable("TestGetHappyPathLock"))
+		defer db.Close()
 		name := randStr(32)
 		const expectedOwner = "custom-owner"
 		c, err := pglock.New(
@@ -470,6 +472,8 @@ func TestGet(t *testing.T) {
 		}
 	})
 	t.Run("unknown key - data", func(t *testing.T) {
+		db := setupDB(t, pglock.WithCustomTable("TestGetUnknownKeyData"))
+		defer db.Close()
 		name := "lock-404"
 		c, err := pglock.New(
 			db,
