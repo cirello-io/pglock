@@ -57,7 +57,25 @@ func setupDB(t testing.TB, options ...pglock.ClientOption) *sql.DB {
 	if err != nil {
 		t.Fatal("cannot connect:", err)
 	}
-	_ = c.CreateTable()
+	if err := c.TryCreateTable(); err != nil {
+		t.Fatal("attempt to create table failed")
+	}
+	return db
+}
+
+func hardSetupDB(t testing.TB, options ...pglock.ClientOption) *sql.DB {
+	t.Helper()
+	db, err := sql.Open("postgres", *dsn)
+	if err != nil {
+		t.Fatal("cannot connect to test database server:", err)
+	}
+	c, err := pglock.New(db, options...)
+	if err != nil {
+		t.Fatal("cannot connect:", err)
+	}
+	if err := c.CreateTable(); err != nil {
+		t.Fatal("cannot create table")
+	}
 	return db
 }
 
