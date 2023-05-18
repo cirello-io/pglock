@@ -110,8 +110,11 @@ func TestDBErrorHandling(t *testing.T) {
 			t.Fatal("cannot create mock:", err)
 		}
 		client.db = db
+		ctx, cancel := context.WithCancel(context.Background())
 		return client, mock, &Lock{
-			leaseDuration: time.Minute,
+			heartbeatContext: ctx,
+			heartbeatCancel:  cancel,
+			leaseDuration:    time.Minute,
 		}
 	}
 	t.Run("acquire", func(t *testing.T) {

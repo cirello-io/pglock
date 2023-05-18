@@ -33,6 +33,7 @@ import (
 	"cirello.io/pglock"
 	_ "github.com/jackc/pgx/v4/stdlib"
 	"github.com/lib/pq"
+	"golang.org/x/sync/errgroup"
 )
 
 type fakeDriver struct{}
@@ -1206,5 +1207,47 @@ func TestGetAllLocks(t *testing.T) {
 		if t.Failed() {
 			break
 		}
+	}
+}
+
+func TestStaleAfterRelease(t *testing.T) {
+	db := setupDB(t)
+	defer db.Close()
+	db.SetMaxOpenConns(30)
+	db.SetMaxIdleConns(10)
+	db.SetConnMaxLifetime(30 * time.Minute)
+
+	c, err := pglock.New(db, pglock.WithOwner("TestStaleAfterRelease"))
+	if err != nil {
+		t.Fatal("cannot connect:", err)
+	}
+	if _, err := db.Exec("DELETE FROM " + pglock.DefaultTableName + " WHERE owner = 'TestStaleAfterRelease'"); err != nil {
+		t.Fatal("cannot reset table:", err)
+	}
+	var (
+		group errgroup.Group
+		start = make(chan struct{})
+	)
+	for i := 0; i < 100; i++ {
+		lockName := fmt.Sprint("lock-name-", i)
+		group.Go(func() error {
+			<-start
+			l, err := c.Acquire(lockName)
+			if err != nil {
+				return fmt.Errorf("cannot acquire lock (%q): %w", lockName, err)
+			}
+			t.Log(lockName, "acquired")
+			time.Sleep(6 * time.Second)
+			if err := l.Close(); err != nil {
+				return fmt.Errorf("cannot release lock (%q): %w", lockName, err)
+			}
+			t.Log(lockName, "released")
+			return nil
+		})
+	}
+	close(start)
+	errGroup := group.Wait()
+	if errGroup != nil {
+		t.Fatal("unexpected error: ", errGroup)
 	}
 }

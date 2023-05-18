@@ -304,16 +304,11 @@ func (c *Client) Release(l *Lock) error {
 }
 
 // ReleaseContext will update the mutex entry to be able to be taken by other
-// clients.
+// clients. If a heartbeat is running, it will stopped it.
 func (c *Client) ReleaseContext(ctx context.Context, l *Lock) error {
-	if l.IsReleased() {
-		l.heartbeatWG.Wait()
-		return ErrLockAlreadyReleased
-	}
+	l.heartbeatCancel()
+	l.heartbeatWG.Wait()
 	err := c.retry(ctx, func() error { return c.storeRelease(ctx, l) })
-	if l.IsReleased() {
-		l.heartbeatWG.Wait()
-	}
 	return err
 }
 
@@ -343,7 +338,6 @@ func (c *Client) storeRelease(ctx context.Context, l *Lock) error {
 		return typedError(err, "cannot confirm whether the lock has been released")
 	} else if affected == 0 {
 		l.isReleased = true
-		l.heartbeatCancel()
 		return ErrLockAlreadyReleased
 	}
 	if !l.keepOnRelease {

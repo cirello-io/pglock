@@ -49,12 +49,7 @@ func (l *Lock) Data() []byte {
 
 // Close releases the lock and interrupts the locks heartbeat, if configured.
 func (l *Lock) Close() error {
-	// The lock release and the heartbeat may collide. If the heartbeat
-	// context is canceled during the lock release, the system will rely on
-	// the elapsed lease duration to make progress. By releasing the lock
-	// first, it won't matter whether it skips the heartbeat check or not.
 	err := l.client.Release(l)
-	l.heartbeatCancel()
 	return err
 }
 

@@ -15,6 +15,7 @@ require (
 	github.com/jackc/pgservicefile v0.0.0-20200714003250-2b9c44734f2b // indirect
 	github.com/jackc/pgtype v1.11.0 // indirect
 	golang.org/x/crypto v0.6.0 // indirect
+	golang.org/x/sync v0.2.0 // indirect
 	golang.org/x/text v0.7.0 // indirect
 )
 
