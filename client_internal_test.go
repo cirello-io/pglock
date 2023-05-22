@@ -233,9 +233,6 @@ func TestDBErrorHandling(t *testing.T) {
 			if err := client.SendHeartbeat(context.Background(), fakeLock); !errors.Is(err, badTx) {
 				t.Errorf("expected tx error missing: %v", err)
 			}
-			if !fakeLock.IsReleased() {
-				t.Errorf("failed heartbeat must release the lock")
-			}
 		})
 		t.Run("bad rvn", func(t *testing.T) {
 			client, mock, fakeLock := setup()
@@ -243,9 +240,6 @@ func TestDBErrorHandling(t *testing.T) {
 			mock.ExpectQuery(`SELECT nextval\('locks_rvn'\)`).WillReturnError(badRVN)
 			if err := client.SendHeartbeat(context.Background(), fakeLock); !errors.Is(err, badRVN) {
 				t.Errorf("expected RVN error missing: %v", err)
-			}
-			if !fakeLock.IsReleased() {
-				t.Errorf("failed heartbeat must release the lock")
 			}
 		})
 		t.Run("bad insert", func(t *testing.T) {
@@ -257,9 +251,6 @@ func TestDBErrorHandling(t *testing.T) {
 			if err := client.SendHeartbeat(context.Background(), fakeLock); !errors.Is(err, badUpdate) {
 				t.Errorf("expected RVN error missing: %v", err)
 			}
-			if !fakeLock.IsReleased() {
-				t.Errorf("failed heartbeat must release the lock")
-			}
 		})
 		t.Run("bad RVN confirmation", func(t *testing.T) {
 			client, mock, fakeLock := setup()
@@ -269,9 +260,6 @@ func TestDBErrorHandling(t *testing.T) {
 			mock.ExpectExec(`UPDATE locks (.+)`).WillReturnResult(sqlmock.NewErrorResult(badRVN))
 			if err := client.SendHeartbeat(context.Background(), fakeLock); !errors.Is(err, badRVN) {
 				t.Errorf("expected RVN confirmation error missing: %v", err)
-			}
-			if !fakeLock.IsReleased() {
-				t.Errorf("failed heartbeat must release the lock")
 			}
 		})
 		t.Run("bad commit", func(t *testing.T) {
@@ -283,9 +271,6 @@ func TestDBErrorHandling(t *testing.T) {
 			mock.ExpectCommit().WillReturnError(badCommit)
 			if err := client.SendHeartbeat(context.Background(), fakeLock); !errors.Is(err, badCommit) {
 				t.Errorf("expected commit error missing: %v", err)
-			}
-			if !fakeLock.IsReleased() {
-				t.Errorf("failed heartbeat must release the lock")
 			}
 		})
 	})

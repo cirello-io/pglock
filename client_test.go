@@ -1024,7 +1024,7 @@ func TestIssue29(t *testing.T) {
 		lockName := randStr(32)
 		c, err := pglock.UnsafeNew(
 			db,
-			pglock.WithLeaseDuration(5*time.Second),
+			pglock.WithLeaseDuration(2*time.Second),
 			pglock.WithHeartbeatFrequency(0),
 		)
 		if err != nil {
