@@ -64,22 +64,6 @@ func setupDB(t testing.TB, options ...pglock.ClientOption) *sql.DB {
 	return db
 }
 
-func hardSetupDB(t testing.TB, options ...pglock.ClientOption) *sql.DB {
-	t.Helper()
-	db, err := sql.Open("postgres", *dsn)
-	if err != nil {
-		t.Fatal("cannot connect to test database server:", err)
-	}
-	c, err := pglock.New(db, options...)
-	if err != nil {
-		t.Fatal("cannot connect:", err)
-	}
-	if err := c.CreateTable(); err != nil {
-		t.Fatal("cannot create table")
-	}
-	return db
-}
-
 func setupCustomDB(t *testing.T, driver string) *sql.DB {
 	t.Helper()
 	db, err := sql.Open(driver, *dsn)
@@ -147,7 +131,7 @@ func TestDropTable(t *testing.T) {
 	t.Run("custom tablename", func(t *testing.T) {
 		tableName := randStr(32)
 		defer func() {
-			db.Exec("DROP TABLE " + tableName)
+			_, _ = db.Exec("DROP TABLE " + tableName)
 		}()
 		c, err := pglock.New(
 			db,
@@ -178,18 +162,18 @@ func TestDropTable(t *testing.T) {
 	t.Run("table does not exist", func(t *testing.T) {
 		tableName := randStr(32)
 
-		c, err := pglock.New(
+		c, _ := pglock.New(
 			db,
 			pglock.WithLogger(&testLogger{t}),
 			pglock.WithCustomTable(tableName),
 		)
 
-		exist, err := tableInDB(db, tableName)
+		exist, _ := tableInDB(db, tableName)
 		if exist {
 			t.Fatal("table with name " + tableName + " already exists")
 		}
 
-		err = c.DropTable()
+		err := c.DropTable()
 		if err == nil {
 			t.Error("did not receive an error dropping a table that does not exist")
 		}
@@ -416,11 +400,13 @@ func TestAcquire(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	var locked bool
+	var err2 error
 	go func() {
 		defer wg.Done()
 		l2, err := c.Acquire(name)
 		if err != nil {
-			t.Fatal("unexpected error while acquiring 2nd lock:", err)
+			err2 = err
+			return
 		}
 		t.Log("acquired second lock")
 		locked = true
@@ -429,6 +415,9 @@ func TestAcquire(t *testing.T) {
 	time.Sleep(6 * time.Second)
 	l1.Close()
 	wg.Wait()
+	if err2 != nil {
+		t.Error("unexpected error while acquiring 2nd lock:", err2)
+	}
 	if !locked {
 		t.Fatal("concurrent lock flow is not working")
 	}
@@ -582,7 +571,7 @@ func TestCustomTable(t *testing.T) {
 	t.Run("happy path", func(t *testing.T) {
 		tableName := randStr(32)
 		defer func() {
-			db.Exec("DROP TABLE " + tableName)
+			_, _ = db.Exec("DROP TABLE " + tableName)
 		}()
 		name := randStr(32)
 		c, err := pglock.New(
@@ -606,7 +595,7 @@ func TestCustomTable(t *testing.T) {
 	t.Run("duplicated call", func(t *testing.T) {
 		tableName := randStr(32)
 		defer func() {
-			db.Exec("DROP TABLE " + tableName)
+			_, _ = db.Exec("DROP TABLE " + tableName)
 		}()
 		c, err := pglock.New(
 			db,
@@ -632,7 +621,7 @@ func TestCustomTableIdemPotent(t *testing.T) {
 	t.Run("happy path", func(t *testing.T) {
 		tableName := randStr(32)
 		defer func() {
-			db.Exec("DROP TABLE " + tableName)
+			_, _ = db.Exec("DROP TABLE " + tableName)
 		}()
 		name := randStr(32)
 		c, err := pglock.New(
@@ -656,7 +645,7 @@ func TestCustomTableIdemPotent(t *testing.T) {
 	t.Run("duplicated call", func(t *testing.T) {
 		tableName := randStr(32)
 		defer func() {
-			db.Exec("DROP TABLE " + tableName)
+			_, _ = db.Exec("DROP TABLE " + tableName)
 		}()
 		c, err := pglock.New(
 			db,
@@ -712,6 +701,7 @@ func TestDo(t *testing.T) {
 		ranOnce := make(chan struct{})
 		var wg sync.WaitGroup
 		wg.Add(1)
+		lockErr := make(chan error, 1)
 		go func() {
 			defer wg.Done()
 			err = c.Do(context.Background(), name, func(ctx context.Context, l *pglock.Lock) error {
@@ -729,10 +719,15 @@ func TestDo(t *testing.T) {
 				}
 			})
 			if err != nil && err != context.Canceled {
-				t.Fatal("unexpected error while running under lock:", err)
+				lockErr <- err
 			}
 		}()
 		<-ranOnce
+		select {
+		case err := <-lockErr:
+			t.Fatal("unexpected error while running under lock:", err)
+		default:
+		}
 		t.Log("directly releasing lock")
 		if err := releaseLockByName(db, name); err != nil {
 			t.Fatalf("cannot forcefully release lock: %v", err)
@@ -978,15 +973,19 @@ func testSendHeartbeatRacy(t *testing.T) {
 	var wg sync.WaitGroup
 	done := make(chan struct{})
 	wg.Add(1)
+	releaseErr := make(chan error, 1)
 	go func() {
 		defer wg.Done()
 		if err := c.Release(l); err != nil {
-			t.Fatal("unexpected error while releasing lock:", err)
+			releaseErr <- err
+			return
 		} else {
 			close(done)
 		}
 	}()
 	select {
+	case err := <-releaseErr:
+		t.Fatal("unexpected error while releasing lock:", err)
 	case <-time.After(5 * time.Second):
 		t.Fatal("deadlock between sendHeartbeat and release")
 	case <-done:
@@ -1177,7 +1176,7 @@ func TestGetAllLocks(t *testing.T) {
 	}
 	defer db.Close()
 	_ = c.CreateTable()
-	defer c.DropTable()
+	defer func() { _ = c.DropTable() }()
 	names := make(map[string]struct{})
 	expected := []byte("42")
 	for i := 0; i < 5; i++ {

@@ -1,0 +1,7 @@
+linters:
+  enable:
+    - unused
+    - errcheck
+    - ineffassign
+    - staticcheck
+    - govet
