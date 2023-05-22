@@ -401,13 +401,11 @@ func (c *Client) storeHeartbeat(ctx context.Context, l *Lock) error {
 
 	rvn, err := c.getNextRVN(ctx, c.db)
 	if err != nil {
-		l.isReleased = true
 		return typedError(err, "cannot run query to read record version number")
 	}
 
 	tx, err := c.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
 	if err != nil {
-		l.isReleased = true
 		return typedError(err, "cannot create transaction for lock acquisition")
 	}
 	result, err := tx.ExecContext(ctx, `
@@ -420,19 +418,16 @@ func (c *Client) storeHeartbeat(ctx context.Context, l *Lock) error {
 			AND "record_version_number" = $2
 	`, l.name, l.recordVersionNumber, rvn)
 	if err != nil {
-		l.isReleased = true
 		return typedError(err, "cannot run query to update the heartbeat")
 	}
 	affected, err := result.RowsAffected()
 	if err != nil {
-		l.isReleased = true
 		return typedError(err, "cannot confirm whether the lock has been updated for the heartbeat")
 	} else if affected == 0 {
 		l.isReleased = true
 		return ErrLockAlreadyReleased
 	}
 	if err := tx.Commit(); err != nil {
-		l.isReleased = true
 		return typedError(err, "cannot commit lock heartbeat")
 	}
 	l.recordVersionNumber = rvn
@@ -505,6 +500,10 @@ func (c *Client) getNextRVN(ctx context.Context, db *sql.DB) (int64, error) {
 const maxRetries = 1024
 
 func (c *Client) retry(ctx context.Context, f func() error) error {
+	retryPeriod := c.heartbeatFrequency
+	if retryPeriod == 0 {
+		retryPeriod = c.leaseDuration
+	}
 	var err error
 	for i := 0; i < maxRetries; i++ {
 		err = f()
@@ -513,7 +512,7 @@ func (c *Client) retry(ctx context.Context, f func() error) error {
 		}
 		c.log.Println("bad transaction, retrying:", err)
 		select {
-		case <-time.After(c.heartbeatFrequency):
+		case <-time.After(retryPeriod):
 		case <-ctx.Done():
 			return err
 		}
