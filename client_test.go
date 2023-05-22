@@ -400,11 +400,13 @@ func TestAcquire(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	var locked bool
+	var err2 error
 	go func() {
 		defer wg.Done()
 		l2, err := c.Acquire(name)
 		if err != nil {
-			t.Fatal("unexpected error while acquiring 2nd lock:", err)
+			err2 = err
+			return
 		}
 		t.Log("acquired second lock")
 		locked = true
@@ -413,6 +415,9 @@ func TestAcquire(t *testing.T) {
 	time.Sleep(6 * time.Second)
 	l1.Close()
 	wg.Wait()
+	if err2 != nil {
+		t.Error("unexpected error while acquiring 2nd lock:", err2)
+	}
 	if !locked {
 		t.Fatal("concurrent lock flow is not working")
 	}
@@ -696,6 +701,7 @@ func TestDo(t *testing.T) {
 		ranOnce := make(chan struct{})
 		var wg sync.WaitGroup
 		wg.Add(1)
+		lockErr := make(chan error, 1)
 		go func() {
 			defer wg.Done()
 			err = c.Do(context.Background(), name, func(ctx context.Context, l *pglock.Lock) error {
@@ -713,10 +719,15 @@ func TestDo(t *testing.T) {
 				}
 			})
 			if err != nil && err != context.Canceled {
-				t.Fatal("unexpected error while running under lock:", err)
+				lockErr <- err
 			}
 		}()
 		<-ranOnce
+		select {
+		case err := <-lockErr:
+			t.Fatal("unexpected error while running under lock:", err)
+		default:
+		}
 		t.Log("directly releasing lock")
 		if err := releaseLockByName(db, name); err != nil {
 			t.Fatalf("cannot forcefully release lock: %v", err)
@@ -962,15 +973,19 @@ func testSendHeartbeatRacy(t *testing.T) {
 	var wg sync.WaitGroup
 	done := make(chan struct{})
 	wg.Add(1)
+	releaseErr := make(chan error, 1)
 	go func() {
 		defer wg.Done()
 		if err := c.Release(l); err != nil {
-			t.Fatal("unexpected error while releasing lock:", err)
+			releaseErr <- err
+			return
 		} else {
 			close(done)
 		}
 	}()
 	select {
+	case err := <-releaseErr:
+		t.Fatal("unexpected error while releasing lock:", err)
 	case <-time.After(5 * time.Second):
 		t.Fatal("deadlock between sendHeartbeat and release")
 	case <-done:
