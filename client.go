@@ -135,7 +135,7 @@ func (c *Client) CreateTable() error {
 }
 
 // TryCreateTable prepares a PostgreSQL table with the right DDL for it to be
-// used by this lock client. If the table already exists, it will be a no-op
+// used by this lock client. If the table already exists, it will be a no-op.
 func (c *Client) TryCreateTable() error {
 	values := createTableTemplateValue{TableName: c.tableName, Modifier: "IF NOT EXISTS"}
 	return c.createTable(values)
@@ -158,7 +158,7 @@ func (c *Client) createTable(values createTableTemplateValue) error {
 }
 
 // DropTable cleans up a PostgreSQL DB from what was created in the CreateTable
-// function
+// function.
 func (c *Client) DropTable() error {
 	_, err := c.db.Exec("DROP TABLE " + c.tableName)
 	if err != nil {
@@ -558,7 +558,7 @@ func (c *Client) getAllLocks(ctx context.Context) ([]*ReadOnlyLock, error) {
 	return locks, nil
 }
 
-// ClientOption reconfigures the lock client
+// ClientOption reconfigures the lock client.
 type ClientOption func(*Client)
 
 // WithLogger injects a logger into the client, so its internals can be

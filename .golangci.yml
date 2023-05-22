@@ -5,3 +5,4 @@ linters:
     - ineffassign
     - staticcheck
     - govet
+    - godot
