@@ -131,7 +131,7 @@ func TestDropTable(t *testing.T) {
 	t.Run("custom tablename", func(t *testing.T) {
 		tableName := randStr(32)
 		defer func() {
-			db.Exec("DROP TABLE " + tableName)
+			_, _ = db.Exec("DROP TABLE " + tableName)
 		}()
 		c, err := pglock.New(
 			db,
@@ -566,7 +566,7 @@ func TestCustomTable(t *testing.T) {
 	t.Run("happy path", func(t *testing.T) {
 		tableName := randStr(32)
 		defer func() {
-			db.Exec("DROP TABLE " + tableName)
+			_, _ = db.Exec("DROP TABLE " + tableName)
 		}()
 		name := randStr(32)
 		c, err := pglock.New(
@@ -590,7 +590,7 @@ func TestCustomTable(t *testing.T) {
 	t.Run("duplicated call", func(t *testing.T) {
 		tableName := randStr(32)
 		defer func() {
-			db.Exec("DROP TABLE " + tableName)
+			_, _ = db.Exec("DROP TABLE " + tableName)
 		}()
 		c, err := pglock.New(
 			db,
@@ -616,7 +616,7 @@ func TestCustomTableIdemPotent(t *testing.T) {
 	t.Run("happy path", func(t *testing.T) {
 		tableName := randStr(32)
 		defer func() {
-			db.Exec("DROP TABLE " + tableName)
+			_, _ = db.Exec("DROP TABLE " + tableName)
 		}()
 		name := randStr(32)
 		c, err := pglock.New(
@@ -640,7 +640,7 @@ func TestCustomTableIdemPotent(t *testing.T) {
 	t.Run("duplicated call", func(t *testing.T) {
 		tableName := randStr(32)
 		defer func() {
-			db.Exec("DROP TABLE " + tableName)
+			_, _ = db.Exec("DROP TABLE " + tableName)
 		}()
 		c, err := pglock.New(
 			db,
@@ -1161,7 +1161,7 @@ func TestGetAllLocks(t *testing.T) {
 	}
 	defer db.Close()
 	_ = c.CreateTable()
-	defer c.DropTable()
+	defer func() { _ = c.DropTable() }()
 	names := make(map[string]struct{})
 	expected := []byte("42")
 	for i := 0; i < 5; i++ {

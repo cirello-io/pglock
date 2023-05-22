@@ -149,7 +149,7 @@ type createTableTemplateValue struct {
 func (c *Client) createTable(values createTableTemplateValue) error {
 	for _, cmd := range createTableSchemaCommands {
 		var qry strings.Builder
-		cmd.Execute(&qry, values)
+		_ = cmd.Execute(&qry, values)
 		if _, err := c.db.Exec(qry.String()); err != nil {
 			return fmt.Errorf("cannot setup the database: %w", err)
 		}
