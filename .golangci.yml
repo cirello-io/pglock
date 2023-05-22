@@ -1,8 +1,7 @@
 linters:
-  disable:
-    - govet
   enable:
     - unused
     - errcheck
     - ineffassign
     - staticcheck
+    - govet
