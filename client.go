@@ -184,10 +184,11 @@ func (c *Client) AcquireContext(ctx context.Context, name string, opts ...LockOp
 			return nil, ErrNotAcquired
 		default:
 			err := c.retry(ctx, func() error { return c.tryAcquire(ctx, l) })
-			if l.failIfLocked && err == ErrNotAcquired {
+			switch {
+			case l.failIfLocked && err == ErrNotAcquired:
 				c.log.Println("not acquired, exit")
 				return l, err
-			} else if err == ErrNotAcquired {
+			case err == ErrNotAcquired:
 				c.log.Println("not acquired, wait:", l.leaseDuration)
 				select {
 				case <-time.After(l.leaseDuration):
@@ -195,7 +196,7 @@ func (c *Client) AcquireContext(ctx context.Context, name string, opts ...LockOp
 					return l, err
 				}
 				continue
-			} else if err != nil {
+			case err != nil:
 				c.log.Println("error:", err)
 				return nil, err
 			}

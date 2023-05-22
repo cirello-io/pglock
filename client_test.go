@@ -30,10 +30,11 @@ import (
 	"testing"
 	"time"
 
-	"cirello.io/pglock"
 	_ "github.com/jackc/pgx/v4/stdlib"
 	"github.com/lib/pq"
 	"golang.org/x/sync/errgroup"
+
+	"cirello.io/pglock"
 )
 
 type fakeDriver struct{}
@@ -246,7 +247,6 @@ func TestOpen(t *testing.T) {
 			t.Fatal("got unexpected error when the client was misconfigured")
 		}
 	})
-
 }
 
 func TestFailIfLocked(t *testing.T) {
@@ -1137,7 +1137,7 @@ func parallelAcquire(t testing.TB, maxConcurrency int) {
 	case err := <-errCh:
 		// If the context is cancelled its likely we will get a lot of
 		// errors of in flight operations. We don't care about those so
-		// we will not Fail on any error that occured after context
+		// we will not Fail on any error that occurred after context
 		// cancellation
 		if ctx.Err() != nil {
 			return

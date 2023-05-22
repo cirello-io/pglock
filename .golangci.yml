@@ -1,0 +1,20 @@
+linters:
+  disable:
+    - errcheck
+    - ineffassign 
+    - govet
+    - staticcheck
+    - unused
+  enable:
+    - gci
+    - gocritic
+    - gofumpt
+    - misspell
+    - revive
+
+linters-settings:
+  gci:
+    sections:
+      - standard
+      - default
+      - prefix(cirello.io/pglock)

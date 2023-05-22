@@ -23,59 +23,57 @@ limitations under the License.
 //
 // Basic usage:
 //
-// 	db, err := sql.Open("postgres", *dsn)
-// 	if err != nil {
-// 		log.Fatal("cannot connect to test database server:", err)
-// 	}
-// 	name := randStr(32)
-// 	c, err := pglock.New(db)
-// 	if err != nil {
-// 		log.Fatal("cannot create lock client:", err)
-// 	}
-// 	l1, err := c.Acquire(name)
-// 	if err != nil {
-// 		log.Fatal("unexpected error while acquiring 1st lock:", err)
-// 	}
-// 	t.Log("acquired first lock")
-// 	var wg sync.WaitGroup
-// 	wg.Add(1)
-// 	var locked bool
-// 	go func() {
-// 		defer wg.Done()
-// 		l2, err := c.Acquire(name)
-// 		if err != nil {
-// 			log.Fatal("unexpected error while acquiring 2nd lock:", err)
-// 		}
-// 		t.Log("acquired second lock")
-// 		locked = true
-// 		l2.Close()
-// 	}()
-// 	time.Sleep(6 * time.Second)
-// 	l1.Close()
-// 	wg.Wait()
+//	db, err := sql.Open("postgres", *dsn)
+//	if err != nil {
+//		log.Fatal("cannot connect to test database server:", err)
+//	}
+//	name := randStr(32)
+//	c, err := pglock.New(db)
+//	if err != nil {
+//		log.Fatal("cannot create lock client:", err)
+//	}
+//	l1, err := c.Acquire(name)
+//	if err != nil {
+//		log.Fatal("unexpected error while acquiring 1st lock:", err)
+//	}
+//	t.Log("acquired first lock")
+//	var wg sync.WaitGroup
+//	wg.Add(1)
+//	var locked bool
+//	go func() {
+//		defer wg.Done()
+//		l2, err := c.Acquire(name)
+//		if err != nil {
+//			log.Fatal("unexpected error while acquiring 2nd lock:", err)
+//		}
+//		t.Log("acquired second lock")
+//		locked = true
+//		l2.Close()
+//	}()
+//	time.Sleep(6 * time.Second)
+//	l1.Close()
+//	wg.Wait()
 //
 // pglock.Client.Do can be used for long-running processes:
 //
-// 	err = c.Do(context.Background(), name, func(ctx context.Context, l *pglock.Lock) error {
-// 		once := make(chan struct{}, 1)
-// 		once <- struct{}{}
-// 		for {
-// 			select {
-// 			case <-ctx.Done():
-// 				t.Log("context canceled")
-// 				return ctx.Err()
-// 			case <-once:
-// 				t.Log("executed once")
-// 				close(ranOnce)
-// 			}
-// 		}
-// 	})
-// 	if err != nil && err != context.Canceled {
-// 		log.Fatal("unexpected error while running under lock:", err)
-// 	}
-//
+//	err = c.Do(context.Background(), name, func(ctx context.Context, l *pglock.Lock) error {
+//		once := make(chan struct{}, 1)
+//		once <- struct{}{}
+//		for {
+//			select {
+//			case <-ctx.Done():
+//				t.Log("context canceled")
+//				return ctx.Err()
+//			case <-once:
+//				t.Log("executed once")
+//				close(ranOnce)
+//			}
+//		}
+//	})
+//	if err != nil && err != context.Canceled {
+//		log.Fatal("unexpected error while running under lock:", err)
+//	}
 //
 // This package is covered by this SLA:
 // https://github.com/cirello-io/public/blob/master/SLA.md
-//
 package pglock // import "cirello.io/pglock"
