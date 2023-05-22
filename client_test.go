@@ -162,18 +162,18 @@ func TestDropTable(t *testing.T) {
 	t.Run("table does not exist", func(t *testing.T) {
 		tableName := randStr(32)
 
-		c, err := pglock.New(
+		c, _ := pglock.New(
 			db,
 			pglock.WithLogger(&testLogger{t}),
 			pglock.WithCustomTable(tableName),
 		)
 
-		exist, err := tableInDB(db, tableName)
+		exist, _ := tableInDB(db, tableName)
 		if exist {
 			t.Fatal("table with name " + tableName + " already exists")
 		}
 
-		err = c.DropTable()
+		err := c.DropTable()
 		if err == nil {
 			t.Error("did not receive an error dropping a table that does not exist")
 		}
