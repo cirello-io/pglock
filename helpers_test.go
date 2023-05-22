@@ -29,9 +29,10 @@ func init() {
 	rand.Seed(time.Now().UnixNano())
 }
 
-func randStr(n int) string {
+func randStr() string {
+	const length = 32
 	var b bytes.Buffer
-	for i := 0; i < n; i++ {
+	for i := 0; i < length; i++ {
 		b.WriteByte(chars[rand.Intn(len(chars))])
 	}
 	return b.String()

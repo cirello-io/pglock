@@ -129,7 +129,7 @@ func TestDropTable(t *testing.T) {
 	})
 
 	t.Run("custom tablename", func(t *testing.T) {
-		tableName := randStr(32)
+		tableName := randStr()
 		defer func() {
 			_, _ = db.Exec("DROP TABLE " + tableName)
 		}()
@@ -160,7 +160,7 @@ func TestDropTable(t *testing.T) {
 	})
 
 	t.Run("table does not exist", func(t *testing.T) {
-		tableName := randStr(32)
+		tableName := randStr()
 
 		c, _ := pglock.New(
 			db,
@@ -237,7 +237,7 @@ func TestFailIfLocked(t *testing.T) {
 	t.Parallel()
 	db := setupDB(t)
 	defer db.Close()
-	name := randStr(32)
+	name := randStr()
 	c, err := pglock.New(
 		db,
 		pglock.WithLogger(&testLogger{t}),
@@ -263,7 +263,7 @@ func TestCustomHeartbeatContext(t *testing.T) {
 	t.Run("custom context", func(t *testing.T) {
 		db := setupDB(t)
 		defer db.Close()
-		name := randStr(32)
+		name := randStr()
 		const heartbeatFrequency = 2 * time.Second
 		c, err := pglock.New(
 			db,
@@ -292,7 +292,7 @@ func TestCustomHeartbeatContext(t *testing.T) {
 	t.Run("inherited context", func(t *testing.T) {
 		db := setupDB(t)
 		defer db.Close()
-		name := randStr(32)
+		name := randStr()
 		const heartbeatFrequency = 2 * time.Second
 		c, err := pglock.New(
 			db,
@@ -322,7 +322,7 @@ func TestKeepOnRelease(t *testing.T) {
 	t.Parallel()
 	db := setupDB(t)
 	defer db.Close()
-	name := randStr(32)
+	name := randStr()
 	c, err := pglock.New(
 		db,
 		pglock.WithLogger(&testLogger{t}),
@@ -356,7 +356,7 @@ func TestClose(t *testing.T) {
 	t.Parallel()
 	db := setupDB(t)
 	defer db.Close()
-	name := randStr(32)
+	name := randStr()
 	c, err := pglock.New(
 		db,
 		pglock.WithLogger(&testLogger{t}),
@@ -381,7 +381,7 @@ func TestAcquire(t *testing.T) {
 	t.Parallel()
 	db := setupDB(t)
 	defer db.Close()
-	name := randStr(32)
+	name := randStr()
 	const heartbeatFrequency = 1 * time.Second
 	c, err := pglock.New(
 		db,
@@ -428,7 +428,7 @@ func TestGet(t *testing.T) {
 	t.Run("happy path - data", func(t *testing.T) {
 		db := setupDB(t, pglock.WithCustomTable("TestGetHappyPathData"))
 		defer db.Close()
-		name := randStr(32)
+		name := randStr()
 		c, err := pglock.New(
 			db,
 			pglock.WithLogger(&testLogger{t}),
@@ -453,7 +453,7 @@ func TestGet(t *testing.T) {
 	t.Run("happy path - lock", func(t *testing.T) {
 		db := setupDB(t, pglock.WithCustomTable("TestGetHappyPathLock"))
 		defer db.Close()
-		name := randStr(32)
+		name := randStr()
 		const expectedOwner = "custom-owner"
 		c, err := pglock.New(
 			db,
@@ -505,7 +505,7 @@ func TestLockData(t *testing.T) {
 	db := setupDB(t)
 	defer db.Close()
 	t.Run("reuse lock data", func(t *testing.T) {
-		name := randStr(32)
+		name := randStr()
 		c, err := pglock.New(
 			db,
 			pglock.WithLogger(&testLogger{t}),
@@ -534,7 +534,7 @@ func TestLockData(t *testing.T) {
 	})
 
 	t.Run("replace lock data", func(t *testing.T) {
-		name := randStr(32)
+		name := randStr()
 		c, err := pglock.New(
 			db,
 			pglock.WithLogger(&testLogger{t}),
@@ -569,11 +569,11 @@ func TestCustomTable(t *testing.T) {
 	db := setupDB(t)
 	defer db.Close()
 	t.Run("happy path", func(t *testing.T) {
-		tableName := randStr(32)
+		tableName := randStr()
 		defer func() {
 			_, _ = db.Exec("DROP TABLE " + tableName)
 		}()
-		name := randStr(32)
+		name := randStr()
 		c, err := pglock.New(
 			db,
 			pglock.WithLogger(&testLogger{t}),
@@ -593,7 +593,7 @@ func TestCustomTable(t *testing.T) {
 		t.Log("first lock stored")
 	})
 	t.Run("duplicated call", func(t *testing.T) {
-		tableName := randStr(32)
+		tableName := randStr()
 		defer func() {
 			_, _ = db.Exec("DROP TABLE " + tableName)
 		}()
@@ -619,11 +619,11 @@ func TestCustomTableIdemPotent(t *testing.T) {
 	db := setupDB(t)
 	defer db.Close()
 	t.Run("happy path", func(t *testing.T) {
-		tableName := randStr(32)
+		tableName := randStr()
 		defer func() {
 			_, _ = db.Exec("DROP TABLE " + tableName)
 		}()
-		name := randStr(32)
+		name := randStr()
 		c, err := pglock.New(
 			db,
 			pglock.WithLogger(&testLogger{t}),
@@ -643,7 +643,7 @@ func TestCustomTableIdemPotent(t *testing.T) {
 		t.Log("first lock stored")
 	})
 	t.Run("duplicated call", func(t *testing.T) {
-		tableName := randStr(32)
+		tableName := randStr()
 		defer func() {
 			_, _ = db.Exec("DROP TABLE " + tableName)
 		}()
@@ -669,7 +669,7 @@ func TestCanceledContext(t *testing.T) {
 	defer db.Close()
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	name := randStr(32)
+	name := randStr()
 	c, err := pglock.New(
 		db,
 		pglock.WithLogger(&testLogger{t}),
@@ -688,7 +688,7 @@ func TestDo(t *testing.T) {
 	defer db.Close()
 	t.Run("lost lock", func(t *testing.T) {
 		const heartbeatFrequency = 1 * time.Second
-		name := randStr(32)
+		name := randStr()
 		c, err := pglock.New(
 			db,
 			pglock.WithLogger(&testLogger{t}),
@@ -737,7 +737,7 @@ func TestDo(t *testing.T) {
 
 	t.Run("normally completed", func(t *testing.T) {
 		const heartbeatFrequency = 1 * time.Second
-		name := randStr(32)
+		name := randStr()
 		c, err := pglock.New(
 			db,
 			pglock.WithLogger(&testLogger{t}),
@@ -761,7 +761,7 @@ func TestDo(t *testing.T) {
 
 	t.Run("canceled context", func(t *testing.T) {
 		const heartbeatFrequency = 1 * time.Second
-		name := randStr(32)
+		name := randStr()
 		c, err := pglock.New(
 			db,
 			pglock.WithLogger(&testLogger{t}),
@@ -783,7 +783,7 @@ func TestDo(t *testing.T) {
 
 	t.Run("canceled heartbeat context", func(t *testing.T) {
 		const heartbeatFrequency = 1 * time.Second
-		name := randStr(32)
+		name := randStr()
 		c, err := pglock.New(
 			db,
 			pglock.WithLogger(&testLogger{t}),
@@ -811,7 +811,7 @@ func TestDo(t *testing.T) {
 	})
 
 	t.Run("handle failIfLocked", func(t *testing.T) {
-		name := randStr(32)
+		name := randStr()
 		c, err := pglock.New(
 			db,
 			pglock.WithLogger(&testLogger{t}),
@@ -852,7 +852,7 @@ func TestOwner(t *testing.T) {
 	db := setupDB(t)
 	defer db.Close()
 	const expectedOwner = "custom-owner"
-	lockName := randStr(32)
+	lockName := randStr()
 	c, err := pglock.New(
 		db,
 		pglock.WithLogger(&testLogger{t}),
@@ -910,7 +910,7 @@ func TestSendHeartbeat(t *testing.T) {
 		if err != nil {
 			t.Fatal("cannot create lock client:", err)
 		}
-		name := randStr(32)
+		name := randStr()
 		l, err := c.Acquire(name)
 		if err != nil {
 			t.Fatal("unexpected error while acquiring lock:", err)
@@ -934,7 +934,7 @@ func TestSendHeartbeat(t *testing.T) {
 		if err != nil {
 			t.Fatal("cannot create lock client:", err)
 		}
-		name := randStr(32)
+		name := randStr()
 		l, err := c.Acquire(name)
 		if err != nil {
 			t.Fatal("unexpected error while acquiring lock:", err)
@@ -964,7 +964,7 @@ func testSendHeartbeatRacy(t *testing.T) {
 	if err != nil {
 		t.Fatal("cannot create lock client:", err)
 	}
-	name := randStr(32)
+	name := randStr()
 	l, err := c.Acquire(name)
 	if err != nil {
 		t.Fatal("unexpected error while acquiring lock:", err)
@@ -996,7 +996,7 @@ func testSendHeartbeatRacy(t *testing.T) {
 func TestReleaseLostLock(t *testing.T) {
 	db := setupDB(t)
 	defer db.Close()
-	name := randStr(32)
+	name := randStr()
 	c, err := pglock.New(
 		db,
 		pglock.WithLogger(&testLogger{t}),
@@ -1020,7 +1020,7 @@ func TestReleaseLostLock(t *testing.T) {
 func TestIssue29(t *testing.T) {
 	testfunc := func(t *testing.T, db *sql.DB) {
 		t.Helper()
-		lockName := randStr(32)
+		lockName := randStr()
 		c, err := pglock.UnsafeNew(
 			db,
 			pglock.WithLeaseDuration(2*time.Second),
@@ -1084,7 +1084,7 @@ func parallelAcquire(t testing.TB, maxConcurrency int) {
 	defer cancel()
 	errCh := make(chan error, maxConcurrency)
 	for i := 0; i < maxConcurrency; i++ {
-		go func(t testing.TB) {
+		go func() {
 			c, err := pglock.New(
 				db,
 				pglock.WithLogger(&discardLogging{}),
@@ -1099,7 +1099,7 @@ func parallelAcquire(t testing.TB, maxConcurrency int) {
 				}
 				return
 			}
-			name := randStr(32)
+			name := randStr()
 			for {
 				l, err := c.AcquireContext(ctx, name)
 				if err != nil {
@@ -1125,7 +1125,7 @@ func parallelAcquire(t testing.TB, maxConcurrency int) {
 					return
 				}
 			}
-		}(t)
+		}()
 	}
 	t.Log("all clients triggered")
 	select {
@@ -1180,7 +1180,7 @@ func TestGetAllLocks(t *testing.T) {
 	names := make(map[string]struct{})
 	expected := []byte("42")
 	for i := 0; i < 5; i++ {
-		name := randStr(32)
+		name := randStr()
 		if _, err := c.Acquire(name, pglock.WithData(expected)); err != nil {
 			t.Fatal("unexpected error while acquiring lock:", err)
 		}

@@ -6,3 +6,4 @@ linters:
     - staticcheck
     - govet
     - godot
+    - unparam
