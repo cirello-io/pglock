@@ -88,13 +88,13 @@ var ErrNotPostgreSQLDriver = errors.New("this is not a PostgreSQL connection")
 var ErrNotAcquired = errors.New("cannot acquire lock")
 
 // ErrLockAlreadyReleased indicates that a release call cannot be fulfilled
-// because the client does not hold the lock
+// because the client does not hold the lock.
 var ErrLockAlreadyReleased = errors.New("lock is already released")
 
 // ErrLockNotFound is returned for get calls on missing lock entries.
 var ErrLockNotFound = &NotExistError{errors.New("lock not found")}
 
-// Validation errors
+// Validation errors.
 var (
 	ErrDurationTooSmall = errors.New("Heartbeat period must be no more than half the length of the Lease Duration, " +
 		"or locks might expire due to the heartbeat thread taking too long to update them (recommendation is to make it much greater, for example " +
