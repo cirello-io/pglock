@@ -381,29 +381,26 @@ func (c *Client) heartbeat(ctx context.Context, l *Lock) {
 // SendHeartbeat refreshes the mutex entry so to avoid other clients from
 // grabbing it.
 func (c *Client) SendHeartbeat(ctx context.Context, l *Lock) error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.isReleased {
+		return ErrLockAlreadyReleased
+	}
 	err := c.retry(ctx, func() error { return c.storeHeartbeat(ctx, l) })
 	if err != nil {
+		l.isReleased = true
 		return fmt.Errorf("cannot send heartbeat (%v): %w", l.name, err)
 	}
 	return nil
 }
 
 func (c *Client) storeHeartbeat(ctx context.Context, l *Lock) error {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-
-	if l.isReleased {
-		return ErrLockAlreadyReleased
-	}
-
 	ctx, cancel := context.WithTimeout(ctx, l.leaseDuration)
 	defer cancel()
-
 	rvn, err := c.getNextRVN(ctx, c.db)
 	if err != nil {
 		return typedError(err, "cannot run query to read record version number")
 	}
-
 	tx, err := c.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
 	if err != nil {
 		return typedError(err, "cannot create transaction for lock acquisition")
@@ -424,7 +421,6 @@ func (c *Client) storeHeartbeat(ctx context.Context, l *Lock) error {
 	if err != nil {
 		return typedError(err, "cannot confirm whether the lock has been updated for the heartbeat")
 	} else if affected == 0 {
-		l.isReleased = true
 		return ErrLockAlreadyReleased
 	}
 	if err := tx.Commit(); err != nil {
