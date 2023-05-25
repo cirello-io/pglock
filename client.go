@@ -124,7 +124,7 @@ var createTableSchemaCommands = []*template.Template{
 	data BYTEA,
 	owner CHARACTER VARYING(255)
 )`)),
-	template.Must(template.New("createSequence").Parse(`CREATE SEQUENCE {{.Modifier}} {{.TableName}}_rvn OWNED BY {{.TableName}}.record_version_number`)),
+	template.Must(template.New("createSequence").Parse(`CREATE SEQUENCE {{.Modifier}} {{.TableName}}_rvn CYCLE OWNED BY {{.TableName}}.record_version_number`)),
 }
 
 // CreateTable prepares a PostgreSQL table with the right DDL for it to be used
