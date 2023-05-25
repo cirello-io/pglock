@@ -1250,3 +1250,38 @@ func TestStaleAfterRelease(t *testing.T) {
 		t.Fatal("unexpected error: ", errGroup)
 	}
 }
+
+func TestOverflowSequence(t *testing.T) {
+	t.Parallel()
+	db := setupDB(t)
+	defer db.Close()
+	tableName := randStr()
+	defer func() {
+		_, _ = db.Exec("DROP TABLE " + tableName)
+	}()
+	name := randStr()
+	c, err := pglock.New(
+		db,
+		pglock.WithLogger(&testLogger{t}),
+		pglock.WithCustomTable(tableName),
+	)
+	if err != nil {
+		t.Fatal("cannot create lock client:", err)
+	}
+	if err := c.CreateTable(); err != nil {
+		t.Fatal("cannot create table:", err)
+	}
+	const maxBigInt = 9223372036854775807
+	alterSequence := fmt.Sprint("ALTER SEQUENCE ", tableName, "_rvn RESTART WITH ", maxBigInt)
+	t.Log(alterSequence)
+	if _, err := db.Exec(alterSequence); err != nil {
+		t.Fatal("cannot reset sequence:", err)
+	}
+	for i := 0; i < 10; i++ {
+		l1, err := c.Acquire(name)
+		if err != nil {
+			t.Fatal("unexpected error while acquiring lock:", err)
+		}
+		l1.Close()
+	}
+}

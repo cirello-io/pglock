@@ -4,4 +4,4 @@ CREATE TABLE IF NOT EXISTS locks (
 	data BYTEA,
 	owner CHARACTER VARYING(255)
 );
-CREATE SEQUENCE IF NOT EXISTS locks_rvn OWNED BY locks.record_version_number;
+CREATE SEQUENCE IF NOT EXISTS locks_rvn CYCLE OWNED BY locks.record_version_number;
