@@ -21,7 +21,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"math/rand"
 	"net"
@@ -55,7 +55,7 @@ type Client struct {
 	tableName          string
 	leaseDuration      time.Duration
 	heartbeatFrequency time.Duration
-	log                Logger
+	log                LevelLogger
 	owner              string
 }
 
@@ -85,7 +85,7 @@ func newClient(db *sql.DB, opts ...ClientOption) (_ *Client, err error) {
 		tableName:          DefaultTableName,
 		leaseDuration:      DefaultLeaseDuration,
 		heartbeatFrequency: DefaultHeartbeatFrequency,
-		log:                log.New(ioutil.Discard, "", 0),
+		log:                &flatLogger{log.New(io.Discard, "", 0)},
 		owner:              fmt.Sprintf("pglock-%v", rand.Int()),
 	}
 	for _, opt := range opts {
@@ -185,10 +185,10 @@ func (c *Client) AcquireContext(ctx context.Context, name string, opts ...LockOp
 		default:
 			err := c.retry(ctx, func() error { return c.tryAcquire(ctx, l) })
 			if l.failIfLocked && err == ErrNotAcquired {
-				c.log.Println("not acquired, exit")
+				c.log.Debug("not acquired, exit")
 				return l, err
 			} else if err == ErrNotAcquired {
-				c.log.Println("not acquired, wait:", l.leaseDuration)
+				c.log.Debug("not acquired, wait:", l.leaseDuration)
 				select {
 				case <-time.After(l.leaseDuration):
 				case <-ctx.Done():
@@ -196,7 +196,7 @@ func (c *Client) AcquireContext(ctx context.Context, name string, opts ...LockOp
 				}
 				continue
 			} else if err != nil {
-				c.log.Println("error:", err)
+				c.log.Error("error:", err)
 				return nil, err
 			}
 			return l, nil
@@ -232,9 +232,9 @@ func (c *Client) storeAcquire(ctx context.Context, l *Lock) error {
 	if err != nil {
 		return typedError(err, "cannot create transaction for lock acquisition")
 	}
-	c.log.Println("storeAcquire in", l.name, rvn, l.data, l.recordVersionNumber)
+	c.log.Debug("storeAcquire in", l.name, rvn, l.data, l.recordVersionNumber)
 	defer func() {
-		c.log.Println("storeAcquire out", l.name, rvn, l.data, l.recordVersionNumber)
+		c.log.Debug("storeAcquire out", l.name, rvn, l.data, l.recordVersionNumber)
 	}()
 	_, err = tx.ExecContext(ctx, `
 		INSERT INTO `+c.tableName+`
@@ -361,13 +361,13 @@ func (c *Client) storeRelease(ctx context.Context, l *Lock) error {
 
 func (c *Client) heartbeat(ctx context.Context, l *Lock) {
 	defer l.heartbeatWG.Done()
-	c.log.Println("heartbeat started", l.name)
-	defer c.log.Println("heartbeat stopped", l.name)
+	c.log.Debug("heartbeat started", l.name)
+	defer c.log.Debug("heartbeat stopped", l.name)
 	for {
 		if err := ctx.Err(); err != nil {
 			return
 		} else if err := c.SendHeartbeat(ctx, l); err != nil {
-			defer c.log.Println("heartbeat missed", err)
+			defer c.log.Error("heartbeat missed", err)
 			return
 		}
 		select {
@@ -459,7 +459,7 @@ func (c *Client) GetContext(ctx context.Context, name string) (*Lock, error) {
 		return err
 	})
 	if notExist := (&NotExistError{}); err != nil && errors.As(err, &notExist) {
-		c.log.Println("missing lock entry:", err)
+		c.log.Error("missing lock entry:", err)
 	}
 	return l, err
 }
@@ -506,7 +506,7 @@ func (c *Client) retry(ctx context.Context, f func() error) error {
 		if failedPrecondition := (&FailedPreconditionError{}); err == nil || !errors.As(err, &failedPrecondition) {
 			break
 		}
-		c.log.Println("bad transaction, retrying:", err)
+		c.log.Debug("bad transaction, retrying:", err)
 		select {
 		case <-time.After(retryPeriod):
 		case <-ctx.Done():
@@ -559,7 +559,14 @@ type ClientOption func(*Client)
 
 // WithLogger injects a logger into the client, so its internals can be
 // recorded.
+// Deprecated. Use WithLevelLogger instead.
 func WithLogger(l Logger) ClientOption {
+	return func(c *Client) { c.log = &flatLogger{l} }
+}
+
+// WithLevelLogger injects a logger into the client, so its internals can be
+// recorded.
+func WithLevelLogger(l LevelLogger) ClientOption {
 	return func(c *Client) { c.log = l }
 }
 

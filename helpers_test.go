@@ -50,3 +50,17 @@ func (t *testLogger) Println(v ...interface{}) {
 type discardLogging struct{}
 
 func (t *discardLogging) Println(...interface{}) {}
+
+type testLevelLogger struct {
+	t testing.TB
+}
+
+func (t *testLevelLogger) Debug(msg string, args ...any) {
+	t.t.Helper()
+	t.t.Logf("DEBUG: "+msg, args...)
+}
+
+func (t *testLevelLogger) Error(msg string, args ...any) {
+	t.t.Helper()
+	t.t.Logf("ERROR: "+msg, args...)
+}

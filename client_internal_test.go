@@ -21,7 +21,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"net"
 	"testing"
@@ -56,7 +56,7 @@ func TestTypedError(t *testing.T) {
 func TestRetry(t *testing.T) {
 	t.Run("type check", func(t *testing.T) {
 		c := &Client{
-			log: &testLogger{t},
+			log: &flatLogger{&testLogger{t}},
 		}
 		errs := []error{
 			&FailedPreconditionError{errors.New("failed precondition")},
@@ -73,7 +73,7 @@ func TestRetry(t *testing.T) {
 	})
 	t.Run("max retries", func(t *testing.T) {
 		c := &Client{
-			log: log.New(ioutil.Discard, "", 0),
+			log: &flatLogger{log.New(io.Discard, "", 0)},
 		}
 		var retries int
 		err := c.retry(context.Background(), func() error {

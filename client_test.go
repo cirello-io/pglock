@@ -1262,7 +1262,7 @@ func TestOverflowSequence(t *testing.T) {
 	name := randStr()
 	c, err := pglock.New(
 		db,
-		pglock.WithLogger(&testLogger{t}),
+		pglock.WithLevelLogger(&testLevelLogger{t}),
 		pglock.WithCustomTable(tableName),
 	)
 	if err != nil {
