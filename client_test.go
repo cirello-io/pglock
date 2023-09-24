@@ -840,7 +840,7 @@ func TestDo(t *testing.T) {
 			}
 			return nil
 		})
-		if err != nil && err != context.Canceled {
+		if err != nil && !errors.Is(err, context.Canceled) {
 			t.Fatal("unexpected error while running under lock:", err)
 		}
 		t.Log("done")
