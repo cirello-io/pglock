@@ -184,10 +184,10 @@ func (c *Client) AcquireContext(ctx context.Context, name string, opts ...LockOp
 			return nil, ErrNotAcquired
 		default:
 			err := c.retry(ctx, func() error { return c.tryAcquire(ctx, l) })
-			if l.failIfLocked && err == ErrNotAcquired {
+			if l.failIfLocked && errors.Is(err, ErrNotAcquired) {
 				c.log.Debug("not acquired, exit")
 				return l, err
-			} else if err == ErrNotAcquired {
+			} else if errors.Is(err, ErrNotAcquired) {
 				c.log.Debug("not acquired, wait:", l.leaseDuration)
 				select {
 				case <-time.After(l.leaseDuration):
@@ -596,7 +596,7 @@ func typedError(err error, msg string) error {
 	const serializationErrorCode = "40001"
 	if err == nil {
 		return nil
-	} else if err == sql.ErrNoRows {
+	} else if errors.Is(err, sql.ErrNoRows) {
 		return &NotExistError{fmt.Errorf(msg+": %w", err)}
 	} else if _, ok := err.(*net.OpError); ok {
 		return &UnavailableError{fmt.Errorf(msg+": %w", err)}
@@ -610,7 +610,8 @@ func typedError(err error, msg string) error {
 
 func unwrapUntilSQLState(err error) (interface{ SQLState() string }, bool) {
 	for {
-		if e, ok := err.(interface{ SQLState() string }); ok {
+		var e interface{ SQLState() string }
+		if errors.As(err, &e) {
 			return e, true
 		}
 		err = errors.Unwrap(err)
