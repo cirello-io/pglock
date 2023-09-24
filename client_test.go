@@ -199,14 +199,14 @@ func TestNew(t *testing.T) {
 		if err != nil {
 			t.Fatal("cannot connect to test database server:", err)
 		}
-		if _, err := pglock.New(db, pglock.WithLeaseDuration(time.Second), pglock.WithHeartbeatFrequency(time.Second)); err != pglock.ErrNotPostgreSQLDriver {
+		if _, err := pglock.New(db, pglock.WithLeaseDuration(time.Second), pglock.WithHeartbeatFrequency(time.Second)); !errors.Is(err, pglock.ErrNotPostgreSQLDriver) {
 			t.Fatal("got unexpected error when the client was fed with a bad driver:", err)
 		}
 	})
 	t.Run("good driver", func(t *testing.T) {
 		db := setupDB(t)
 		defer db.Close()
-		if _, err := pglock.New(db, pglock.WithLeaseDuration(time.Second), pglock.WithHeartbeatFrequency(time.Second)); err != pglock.ErrDurationTooSmall {
+		if _, err := pglock.New(db, pglock.WithLeaseDuration(time.Second), pglock.WithHeartbeatFrequency(time.Second)); !errors.Is(err, pglock.ErrDurationTooSmall) {
 			t.Fatal("got unexpected error when the client was misconfigured:", err)
 		}
 	})
@@ -215,7 +215,7 @@ func TestNew(t *testing.T) {
 		if err != nil {
 			t.Fatal("cannot connect to test database server:", err)
 		}
-		if _, err := pglock.UnsafeNew(db, pglock.WithLeaseDuration(time.Second), pglock.WithHeartbeatFrequency(time.Second)); err != pglock.ErrDurationTooSmall {
+		if _, err := pglock.UnsafeNew(db, pglock.WithLeaseDuration(time.Second), pglock.WithHeartbeatFrequency(time.Second)); !errors.Is(err, pglock.ErrDurationTooSmall) {
 			t.Fatal("got unexpected error when the client was misconfigured:", err)
 		}
 	})
@@ -226,7 +226,7 @@ func TestOpen(t *testing.T) {
 	t.Run("good dsn", func(t *testing.T) {
 		db := setupDB(t)
 		defer db.Close()
-		if _, err := pglock.New(db, pglock.WithLeaseDuration(time.Second), pglock.WithHeartbeatFrequency(time.Second)); err != pglock.ErrDurationTooSmall {
+		if _, err := pglock.New(db, pglock.WithLeaseDuration(time.Second), pglock.WithHeartbeatFrequency(time.Second)); !errors.Is(err, pglock.ErrDurationTooSmall) {
 			t.Fatal("got unexpected error when the client was misconfigured")
 		}
 	})
@@ -891,7 +891,7 @@ func releaseLockByName(db *sql.DB, name string) error {
 			}
 		}
 		if err != nil {
-			return fmt.Errorf("cannot release lock by name: %v", err)
+			return fmt.Errorf("cannot release lock by name: %w", err)
 		}
 		return nil
 	}
