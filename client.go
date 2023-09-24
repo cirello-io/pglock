@@ -594,13 +594,15 @@ func WithOwner(owner string) ClientOption {
 
 func typedError(err error, msg string) error {
 	const serializationErrorCode = "40001"
+	var opErr *net.OpError
+	var pqErr *pq.Error
 	if err == nil {
 		return nil
 	} else if errors.Is(err, sql.ErrNoRows) {
 		return &NotExistError{fmt.Errorf(msg+": %w", err)}
-	} else if _, ok := err.(*net.OpError); ok {
+	} else if errors.As(err, &opErr) {
 		return &UnavailableError{fmt.Errorf(msg+": %w", err)}
-	} else if e, ok := err.(*pq.Error); ok && e.Code == serializationErrorCode {
+	} else if errors.As(err, &pqErr) && pqErr.Code == serializationErrorCode {
 		return &FailedPreconditionError{fmt.Errorf(msg+": %w", err)}
 	} else if e, ok := unwrapUntilSQLState(err); ok && e.SQLState() == serializationErrorCode {
 		return &FailedPreconditionError{fmt.Errorf(msg+": %w", err)}
