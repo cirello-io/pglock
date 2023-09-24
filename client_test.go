@@ -1136,7 +1136,7 @@ func parallelAcquire(t testing.TB, maxConcurrency int) {
 	case err := <-errCh:
 		// If the context is cancelled its likely we will get a lot of
 		// errors of in flight operations. We don't care about those so
-		// we will not Fail on any error that occured after context
+		// we will not Fail on any error that occurred after context
 		// cancellation
 		if ctx.Err() != nil {
 			return
