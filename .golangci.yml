@@ -2,10 +2,11 @@ linters:
   disable:
     - depguard
   enable:
-    - unused
     - errcheck
-    - ineffassign
-    - staticcheck
-    - govet
     - godot
+    - govet
+    - ineffassign
+    - misspell
+    - staticcheck
     - unparam
+    - unused
