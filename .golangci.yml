@@ -4,6 +4,7 @@ linters:
   enable:
     - unused
     - errcheck
+    - errorlint
     - ineffassign
     - staticcheck
     - govet
