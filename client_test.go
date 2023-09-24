@@ -253,7 +253,7 @@ func TestFailIfLocked(t *testing.T) {
 	}
 	defer l.Close()
 	t.Log("first lock acquired")
-	if _, err := c.Acquire(name, pglock.FailIfLocked()); err != pglock.ErrNotAcquired {
+	if _, err := c.Acquire(name, pglock.FailIfLocked()); !errors.Is(err, pglock.ErrNotAcquired) {
 		t.Fatal("expected ErrNotAcquired")
 	}
 }
@@ -372,7 +372,7 @@ func TestClose(t *testing.T) {
 	}
 	t.Log("lock acquired")
 	l.Close()
-	if err := l.Close(); err != nil && err != pglock.ErrLockAlreadyReleased {
+	if err := l.Close(); err != nil && !errors.Is(err, pglock.ErrLockAlreadyReleased) {
 		t.Fatal("close not idempotent - second lock release should always work:", err)
 	}
 }
@@ -494,7 +494,7 @@ func TestGet(t *testing.T) {
 			t.Fatal("expected error not found on loading unknown key")
 		} else if notFound := (&pglock.NotExistError{}); !errors.As(err, &notFound) {
 			t.Fatal("unexpected error kind found on loading unknown key:", err)
-		} else if err != pglock.ErrLockNotFound {
+		} else if !errors.Is(err, pglock.ErrLockNotFound) {
 			t.Fatal("unexpected error found on loading unknown key:", err)
 		}
 	})
@@ -885,7 +885,8 @@ func releaseLockByName(db *sql.DB, name string) error {
 	const serializationErrorCode = "40001"
 	for {
 		_, err := db.Exec("UPDATE locks SET record_version_number = NULL WHERE name = $1", name)
-		if e, ok := err.(*pq.Error); ok {
+		var e *pq.Error
+		if errors.As(err, &e) {
 			if e.Code == serializationErrorCode {
 				continue
 			}
