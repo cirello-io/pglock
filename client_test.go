@@ -677,7 +677,7 @@ func TestCanceledContext(t *testing.T) {
 	if err != nil {
 		t.Fatal("cannot create lock client:", err)
 	}
-	if _, err := c.AcquireContext(ctx, name); err != pglock.ErrNotAcquired {
+	if _, err := c.AcquireContext(ctx, name); !errors.Is(err, pglock.ErrNotAcquired) {
 		t.Fatal("canceled context should not be able to acquire locks")
 	}
 }
@@ -718,7 +718,7 @@ func TestDo(t *testing.T) {
 					}
 				}
 			})
-			if err != nil && err != context.Canceled {
+			if err != nil && !errors.Is(err, context.Canceled) {
 				lockErr <- err
 			}
 		}()
@@ -754,7 +754,7 @@ func TestDo(t *testing.T) {
 			}
 			return nil
 		})
-		if err != nil && err != context.Canceled {
+		if err != nil && !errors.Is(err, context.Canceled) {
 			t.Fatal("unexpected error while running under lock:", err)
 		}
 	})
