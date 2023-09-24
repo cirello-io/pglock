@@ -776,7 +776,7 @@ func TestDo(t *testing.T) {
 		err = c.Do(ctx, name, func(ctx context.Context, l *pglock.Lock) error {
 			return nil
 		})
-		if err != pglock.ErrNotAcquired {
+		if !errors.Is(err, pglock.ErrNotAcquired) {
 			t.Fatal("unexpected error while running under lock with canceled context:", err)
 		}
 	})
@@ -804,7 +804,7 @@ func TestDo(t *testing.T) {
 				time.Sleep(2 * heartbeatFrequency)
 			}
 		}, pglock.WithCustomHeartbeatContext(ctx))
-		if err != nil && err != context.Canceled {
+		if err != nil && !errors.Is(err, context.Canceled) {
 			t.Fatal("unexpected error while running under lock:", err)
 		}
 		t.Log("done")
@@ -827,7 +827,7 @@ func TestDo(t *testing.T) {
 		err = c.Do(context.Background(), name, func(ctx context.Context, l *pglock.Lock) error {
 			return errors.New("should not have been executed")
 		}, pglock.FailIfLocked())
-		if err != pglock.ErrNotAcquired {
+		if !errors.Is(err, pglock.ErrNotAcquired) {
 			t.Fatal("unexpected error while running under lock:", err)
 		}
 		if _, err := c.Acquire(name); err != nil {
