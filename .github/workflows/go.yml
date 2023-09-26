@@ -34,11 +34,6 @@ jobs:
       with:
         go-version: 'stable'
 
-    - name: Setup golangci-lint
-      uses: golangci/golangci-lint-action@v3
-      with:
-        skip-cache: true
-
     - name: Test
       run: |
         go test -coverprofile=coverage.out -shuffle on -short -v -dsn="postgres://postgres:everyone@localhost:5432/postgres?sslmode=disable" || (sleep 5; go test -coverprofile=coverage.out -shuffle on -short -v -dsn="postgres://postgres:everyone@localhost:5432/postgres?sslmode=disable")
