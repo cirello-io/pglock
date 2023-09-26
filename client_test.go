@@ -48,18 +48,18 @@ func init() {
 
 var dsn = flag.String("dsn", "postgres://postgres@localhost/postgres?sslmode=disable", "connection string to the test database server")
 
-func setupDB(t testing.TB, options ...pglock.ClientOption) *sql.DB {
-	t.Helper()
+func setupDB(tb testing.TB, options ...pglock.ClientOption) *sql.DB {
+	tb.Helper()
 	db, err := sql.Open("postgres", *dsn)
 	if err != nil {
-		t.Fatal("cannot connect to test database server:", err)
+		tb.Fatal("cannot connect to test database server:", err)
 	}
 	c, err := pglock.New(db, options...)
 	if err != nil {
-		t.Fatal("cannot connect:", err)
+		tb.Fatal("cannot connect:", err)
 	}
 	if err := c.TryCreateTable(); err != nil {
-		t.Fatal("attempt to create table failed")
+		tb.Fatal("attempt to create table failed")
 	}
 	return db
 }
@@ -199,14 +199,14 @@ func TestNew(t *testing.T) {
 		if err != nil {
 			t.Fatal("cannot connect to test database server:", err)
 		}
-		if _, err := pglock.New(db, pglock.WithLeaseDuration(time.Second), pglock.WithHeartbeatFrequency(time.Second)); err != pglock.ErrNotPostgreSQLDriver {
+		if _, err := pglock.New(db, pglock.WithLeaseDuration(time.Second), pglock.WithHeartbeatFrequency(time.Second)); !errors.Is(err, pglock.ErrNotPostgreSQLDriver) {
 			t.Fatal("got unexpected error when the client was fed with a bad driver:", err)
 		}
 	})
 	t.Run("good driver", func(t *testing.T) {
 		db := setupDB(t)
 		defer db.Close()
-		if _, err := pglock.New(db, pglock.WithLeaseDuration(time.Second), pglock.WithHeartbeatFrequency(time.Second)); err != pglock.ErrDurationTooSmall {
+		if _, err := pglock.New(db, pglock.WithLeaseDuration(time.Second), pglock.WithHeartbeatFrequency(time.Second)); !errors.Is(err, pglock.ErrDurationTooSmall) {
 			t.Fatal("got unexpected error when the client was misconfigured:", err)
 		}
 	})
@@ -215,7 +215,7 @@ func TestNew(t *testing.T) {
 		if err != nil {
 			t.Fatal("cannot connect to test database server:", err)
 		}
-		if _, err := pglock.UnsafeNew(db, pglock.WithLeaseDuration(time.Second), pglock.WithHeartbeatFrequency(time.Second)); err != pglock.ErrDurationTooSmall {
+		if _, err := pglock.UnsafeNew(db, pglock.WithLeaseDuration(time.Second), pglock.WithHeartbeatFrequency(time.Second)); !errors.Is(err, pglock.ErrDurationTooSmall) {
 			t.Fatal("got unexpected error when the client was misconfigured:", err)
 		}
 	})
@@ -226,7 +226,7 @@ func TestOpen(t *testing.T) {
 	t.Run("good dsn", func(t *testing.T) {
 		db := setupDB(t)
 		defer db.Close()
-		if _, err := pglock.New(db, pglock.WithLeaseDuration(time.Second), pglock.WithHeartbeatFrequency(time.Second)); err != pglock.ErrDurationTooSmall {
+		if _, err := pglock.New(db, pglock.WithLeaseDuration(time.Second), pglock.WithHeartbeatFrequency(time.Second)); !errors.Is(err, pglock.ErrDurationTooSmall) {
 			t.Fatal("got unexpected error when the client was misconfigured")
 		}
 	})
@@ -253,7 +253,7 @@ func TestFailIfLocked(t *testing.T) {
 	}
 	defer l.Close()
 	t.Log("first lock acquired")
-	if _, err := c.Acquire(name, pglock.FailIfLocked()); err != pglock.ErrNotAcquired {
+	if _, err := c.Acquire(name, pglock.FailIfLocked()); !errors.Is(err, pglock.ErrNotAcquired) {
 		t.Fatal("expected ErrNotAcquired")
 	}
 }
@@ -372,7 +372,7 @@ func TestClose(t *testing.T) {
 	}
 	t.Log("lock acquired")
 	l.Close()
-	if err := l.Close(); err != nil && err != pglock.ErrLockAlreadyReleased {
+	if err := l.Close(); err != nil && !errors.Is(err, pglock.ErrLockAlreadyReleased) {
 		t.Fatal("close not idempotent - second lock release should always work:", err)
 	}
 }
@@ -494,7 +494,7 @@ func TestGet(t *testing.T) {
 			t.Fatal("expected error not found on loading unknown key")
 		} else if notFound := (&pglock.NotExistError{}); !errors.As(err, &notFound) {
 			t.Fatal("unexpected error kind found on loading unknown key:", err)
-		} else if err != pglock.ErrLockNotFound {
+		} else if !errors.Is(err, pglock.ErrLockNotFound) {
 			t.Fatal("unexpected error found on loading unknown key:", err)
 		}
 	})
@@ -677,7 +677,7 @@ func TestCanceledContext(t *testing.T) {
 	if err != nil {
 		t.Fatal("cannot create lock client:", err)
 	}
-	if _, err := c.AcquireContext(ctx, name); err != pglock.ErrNotAcquired {
+	if _, err := c.AcquireContext(ctx, name); !errors.Is(err, pglock.ErrNotAcquired) {
 		t.Fatal("canceled context should not be able to acquire locks")
 	}
 }
@@ -718,7 +718,7 @@ func TestDo(t *testing.T) {
 					}
 				}
 			})
-			if err != nil && err != context.Canceled {
+			if err != nil && !errors.Is(err, context.Canceled) {
 				lockErr <- err
 			}
 		}()
@@ -754,7 +754,7 @@ func TestDo(t *testing.T) {
 			}
 			return nil
 		})
-		if err != nil && err != context.Canceled {
+		if err != nil && !errors.Is(err, context.Canceled) {
 			t.Fatal("unexpected error while running under lock:", err)
 		}
 	})
@@ -776,7 +776,7 @@ func TestDo(t *testing.T) {
 		err = c.Do(ctx, name, func(ctx context.Context, l *pglock.Lock) error {
 			return nil
 		})
-		if err != pglock.ErrNotAcquired {
+		if !errors.Is(err, pglock.ErrNotAcquired) {
 			t.Fatal("unexpected error while running under lock with canceled context:", err)
 		}
 	})
@@ -804,7 +804,7 @@ func TestDo(t *testing.T) {
 				time.Sleep(2 * heartbeatFrequency)
 			}
 		}, pglock.WithCustomHeartbeatContext(ctx))
-		if err != nil && err != context.Canceled {
+		if err != nil && !errors.Is(err, context.Canceled) {
 			t.Fatal("unexpected error while running under lock:", err)
 		}
 		t.Log("done")
@@ -827,7 +827,7 @@ func TestDo(t *testing.T) {
 		err = c.Do(context.Background(), name, func(ctx context.Context, l *pglock.Lock) error {
 			return errors.New("should not have been executed")
 		}, pglock.FailIfLocked())
-		if err != pglock.ErrNotAcquired {
+		if !errors.Is(err, pglock.ErrNotAcquired) {
 			t.Fatal("unexpected error while running under lock:", err)
 		}
 		if _, err := c.Acquire(name); err != nil {
@@ -840,7 +840,7 @@ func TestDo(t *testing.T) {
 			}
 			return nil
 		})
-		if err != nil && err != context.Canceled {
+		if err != nil && !errors.Is(err, context.Canceled) {
 			t.Fatal("unexpected error while running under lock:", err)
 		}
 		t.Log("done")
@@ -885,13 +885,13 @@ func releaseLockByName(db *sql.DB, name string) error {
 	const serializationErrorCode = "40001"
 	for {
 		_, err := db.Exec("UPDATE locks SET record_version_number = NULL WHERE name = $1", name)
-		if e, ok := err.(*pq.Error); ok {
-			if e.Code == serializationErrorCode {
+		if errPQ := (&pq.Error{}); errors.As(err, &errPQ) {
+			if errPQ.Code == serializationErrorCode {
 				continue
 			}
 		}
 		if err != nil {
-			return fmt.Errorf("cannot release lock by name: %v", err)
+			return fmt.Errorf("cannot release lock by name: %w", err)
 		}
 		return nil
 	}
@@ -1076,9 +1076,9 @@ func TestIssue29(t *testing.T) {
 	})
 }
 
-func parallelAcquire(t testing.TB, maxConcurrency int) {
-	t.Helper()
-	db := setupDB(t)
+func parallelAcquire(tb testing.TB, maxConcurrency int) {
+	tb.Helper()
+	db := setupDB(tb)
 	defer db.Close()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -1127,7 +1127,7 @@ func parallelAcquire(t testing.TB, maxConcurrency int) {
 			}
 		}()
 	}
-	t.Log("all clients triggered")
+	tb.Log("all clients triggered")
 	select {
 	case <-time.After(10 * time.Second):
 		cancel()
@@ -1136,16 +1136,16 @@ func parallelAcquire(t testing.TB, maxConcurrency int) {
 	case err := <-errCh:
 		// If the context is cancelled its likely we will get a lot of
 		// errors of in flight operations. We don't care about those so
-		// we will not Fail on any error that occured after context
+		// we will not Fail on any error that occurred after context
 		// cancellation
 		if ctx.Err() != nil {
 			return
 		}
 		cancel()
-		t.Error("trapped error:", err)
-		t.Log("draining errors:")
+		tb.Error("trapped error:", err)
+		tb.Log("draining errors:")
 		for err := range errCh {
-			t.Error("drained error:", err)
+			tb.Error("drained error:", err)
 		}
 	}
 }

@@ -184,10 +184,11 @@ func (c *Client) AcquireContext(ctx context.Context, name string, opts ...LockOp
 			return nil, ErrNotAcquired
 		default:
 			err := c.retry(ctx, func() error { return c.tryAcquire(ctx, l) })
-			if l.failIfLocked && err == ErrNotAcquired {
+			switch {
+			case l.failIfLocked && errors.Is(err, ErrNotAcquired):
 				c.log.Debug("not acquired, exit")
 				return l, err
-			} else if err == ErrNotAcquired {
+			case errors.Is(err, ErrNotAcquired):
 				c.log.Debug("not acquired, wait: %v", l.leaseDuration)
 				select {
 				case <-time.After(l.leaseDuration):
@@ -195,7 +196,7 @@ func (c *Client) AcquireContext(ctx context.Context, name string, opts ...LockOp
 					return l, err
 				}
 				continue
-			} else if err != nil {
+			case err != nil:
 				c.log.Error("error: %v", err)
 				return nil, err
 			}
@@ -559,7 +560,7 @@ type ClientOption func(*Client)
 
 // WithLogger injects a logger into the client, so its internals can be
 // recorded.
-// Deprecated. Use WithLevelLogger instead.
+// Deprecated: Use WithLevelLogger instead.
 func WithLogger(l Logger) ClientOption {
 	return func(c *Client) { c.log = &flatLogger{l} }
 }
@@ -596,11 +597,11 @@ func typedError(err error, msg string) error {
 	const serializationErrorCode = "40001"
 	if err == nil {
 		return nil
-	} else if err == sql.ErrNoRows {
+	} else if errors.Is(err, sql.ErrNoRows) {
 		return &NotExistError{fmt.Errorf(msg+": %w", err)}
-	} else if _, ok := err.(*net.OpError); ok {
+	} else if errNetOp := (&net.OpError{}); errors.As(err, &errNetOp) {
 		return &UnavailableError{fmt.Errorf(msg+": %w", err)}
-	} else if e, ok := err.(*pq.Error); ok && e.Code == serializationErrorCode {
+	} else if errPQ := (&pq.Error{}); errors.As(err, &errPQ) && errPQ.Code == serializationErrorCode {
 		return &FailedPreconditionError{fmt.Errorf(msg+": %w", err)}
 	} else if e, ok := unwrapUntilSQLState(err); ok && e.SQLState() == serializationErrorCode {
 		return &FailedPreconditionError{fmt.Errorf(msg+": %w", err)}
@@ -610,7 +611,7 @@ func typedError(err error, msg string) error {
 
 func unwrapUntilSQLState(err error) (interface{ SQLState() string }, bool) {
 	for {
-		if e, ok := err.(interface{ SQLState() string }); ok {
+		if e, ok := hasSQLState(err); ok {
 			return e, true
 		}
 		err = errors.Unwrap(err)
@@ -618,4 +619,9 @@ func unwrapUntilSQLState(err error) (interface{ SQLState() string }, bool) {
 			return nil, false
 		}
 	}
+}
+
+func hasSQLState(v any) (interface{ SQLState() string }, bool) {
+	sqlState, ok := v.(interface{ SQLState() string })
+	return sqlState, ok
 }
