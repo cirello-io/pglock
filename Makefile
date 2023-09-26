@@ -18,6 +18,7 @@ linters:
 		-E "misspell" \
 		-E "prealloc" \
 		-E "predeclared" \
+		-E "revive" \
 		-E "staticcheck" \
 		-E "thelper" \
 		-E "unparam" \

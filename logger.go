@@ -37,10 +37,6 @@ func (fl *flatLogger) Debug(msg string, args ...any) {
 	fl.l.Println(fmt.Sprintf(msg, args...))
 }
 
-func (fl *flatLogger) Info(msg string, args ...any) {
-	fl.l.Println(fmt.Sprintf(msg, args...))
-}
-
 func (fl *flatLogger) Error(msg string, args ...any) {
 	fl.l.Println(fmt.Sprintf(msg, args...))
 }

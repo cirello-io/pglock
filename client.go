@@ -61,7 +61,7 @@ type Client struct {
 
 // New returns a locker client from the given database connection. This function
 // validates that *sql.DB holds a ratified postgreSQL driver (lib/pq).
-func New(db *sql.DB, opts ...ClientOption) (_ *Client, err error) {
+func New(db *sql.DB, opts ...ClientOption) (*Client, error) {
 	if db == nil {
 		return nil, ErrNotPostgreSQLDriver
 	} else if _, ok := db.Driver().(*pq.Driver); !ok {
@@ -72,14 +72,14 @@ func New(db *sql.DB, opts ...ClientOption) (_ *Client, err error) {
 
 // UnsafeNew returns a locker client from the given database connection. This
 // function does not check if *sql.DB holds a ratified postgreSQL driver.
-func UnsafeNew(db *sql.DB, opts ...ClientOption) (_ *Client, err error) {
+func UnsafeNew(db *sql.DB, opts ...ClientOption) (*Client, error) {
 	if db == nil {
 		return nil, ErrNotPostgreSQLDriver
 	}
 	return newClient(db, opts...)
 }
 
-func newClient(db *sql.DB, opts ...ClientOption) (_ *Client, err error) {
+func newClient(db *sql.DB, opts ...ClientOption) (*Client, error) {
 	c := &Client{
 		db:                 db,
 		tableName:          DefaultTableName,
@@ -179,29 +179,23 @@ func (c *Client) Acquire(name string, opts ...LockOption) (*Lock, error) {
 func (c *Client) AcquireContext(ctx context.Context, name string, opts ...LockOption) (*Lock, error) {
 	l := c.newLock(ctx, name, opts)
 	for {
-		select {
-		case <-ctx.Done():
+		if err := ctx.Err(); err != nil {
 			return nil, ErrNotAcquired
-		default:
-			err := c.retry(ctx, func() error { return c.tryAcquire(ctx, l) })
-			switch {
-			case l.failIfLocked && errors.Is(err, ErrNotAcquired):
-				c.log.Debug("not acquired, exit")
-				return l, err
-			case errors.Is(err, ErrNotAcquired):
-				c.log.Debug("not acquired, wait: %v", l.leaseDuration)
-				select {
-				case <-time.After(l.leaseDuration):
-				case <-ctx.Done():
-					return l, err
-				}
-				continue
-			case err != nil:
-				c.log.Error("error: %v", err)
-				return nil, err
-			}
-			return l, nil
 		}
+		err := c.retry(ctx, func() error { return c.tryAcquire(ctx, l) })
+		switch {
+		case l.failIfLocked && errors.Is(err, ErrNotAcquired):
+			c.log.Debug("not acquired, exit")
+			return l, err
+		case errors.Is(err, ErrNotAcquired):
+			c.log.Debug("not acquired, wait: %v", l.leaseDuration)
+			waitFor(ctx, l.leaseDuration)
+			continue
+		case err != nil:
+			c.log.Error("error: %v", err)
+			return nil, err
+		}
+		return l, nil
 	}
 }
 
@@ -371,11 +365,7 @@ func (c *Client) heartbeat(ctx context.Context, l *Lock) {
 			defer c.log.Error("heartbeat missed: %v", err)
 			return
 		}
-		select {
-		case <-time.After(c.heartbeatFrequency):
-		case <-ctx.Done():
-			return
-		}
+		waitFor(ctx, c.heartbeatFrequency)
 	}
 }
 
@@ -508,11 +498,7 @@ func (c *Client) retry(ctx context.Context, f func() error) error {
 			break
 		}
 		c.log.Debug("bad transaction, retrying: %v", err)
-		select {
-		case <-time.After(retryPeriod):
-		case <-ctx.Done():
-			return err
-		}
+		waitFor(ctx, retryPeriod)
 	}
 	return err
 }
@@ -624,4 +610,11 @@ func unwrapUntilSQLState(err error) (interface{ SQLState() string }, bool) {
 func hasSQLState(v any) (interface{ SQLState() string }, bool) {
 	sqlState, ok := v.(interface{ SQLState() string })
 	return sqlState, ok
+}
+
+func waitFor(ctx context.Context, d time.Duration) {
+	select {
+	case <-time.After(d):
+	case <-ctx.Done():
+	}
 }

@@ -59,7 +59,7 @@ func setupDB(tb testing.TB, options ...pglock.ClientOption) *sql.DB {
 		tb.Fatal("cannot connect:", err)
 	}
 	if err := c.TryCreateTable(); err != nil {
-		tb.Fatal("attempt to create table failed")
+		tb.Fatal("attempt to create table failed:", err)
 	}
 	return db
 }
@@ -979,9 +979,8 @@ func testSendHeartbeatRacy(t *testing.T) {
 		if err := c.Release(l); err != nil {
 			releaseErr <- err
 			return
-		} else {
-			close(done)
 		}
+		close(done)
 	}()
 	select {
 	case err := <-releaseErr:
@@ -1015,6 +1014,9 @@ func TestReleaseLostLock(t *testing.T) {
 		t.Fatalf("cannot forcefully release lock: %v", err)
 	}
 	t.Log(c.Release(l))
+	if !l.IsReleased() {
+		t.Fatal("expected lock to be released")
+	}
 }
 
 func TestIssue29(t *testing.T) {

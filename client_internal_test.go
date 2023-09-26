@@ -309,3 +309,23 @@ func TestDBErrorHandling(t *testing.T) {
 		})
 	})
 }
+
+func Test_waitFor(t *testing.T) {
+	const expectedWait = 10 * time.Second
+	t.Run("wait", func(t *testing.T) {
+		start := time.Now()
+		waitFor(context.Background(), expectedWait)
+		if time.Since(start) < expectedWait {
+			t.Fatal("did not wait")
+		}
+	})
+	t.Run("cancel", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		start := time.Now()
+		waitFor(ctx, expectedWait)
+		if time.Since(start) >= expectedWait {
+			t.Fatal("did not cancel")
+		}
+	})
+}
