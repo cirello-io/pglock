@@ -2,9 +2,9 @@ name: Go
 
 on:
   push:
-    branches: [ master ]
+    branches: [ main ]
   pull_request:
-    branches: [ master ]
+  merge_group:
   schedule:
     - cron: '0 0 * * *'
 
@@ -34,9 +34,15 @@ jobs:
       with:
         go-version: 'stable'
 
+    - name: golangci-lint cache
+      uses: actions/cache@v3
+      with:
+        path: ~/go/bin/golangci-lint
+        key: ${{ runner.os }}-golangci-lint-v1.54.2
+
     - name: Test
       run: |
-        make test
+        make linters test
 
     - name: Upload coverage
       uses: actions/upload-artifact@v3
