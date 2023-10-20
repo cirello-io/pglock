@@ -12,7 +12,7 @@ jobs:
   build:
     strategy:
       matrix:
-        postgres-version: [16, 15, 14, 13, 12]
+        postgres-version: ['latest', 16, 15, 14, 13, 12]
     runs-on: ubuntu-latest
 
     services:
