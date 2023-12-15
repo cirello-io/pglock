@@ -48,6 +48,15 @@ func init() {
 
 var dsn = flag.String("dsn", "postgres://postgres@localhost/postgres?sslmode=disable", "connection string to the test database server")
 
+func setupDBConn(tb testing.TB) *sql.DB {
+	tb.Helper()
+	db, err := sql.Open("postgres", *dsn)
+	if err != nil {
+		tb.Fatal("cannot connect to test database server:", err)
+	}
+	return db
+}
+
 func setupDB(tb testing.TB, options ...pglock.ClientOption) *sql.DB {
 	tb.Helper()
 	db, err := sql.Open("postgres", *dsn)
@@ -204,9 +213,9 @@ func TestNew(t *testing.T) {
 		}
 	})
 	t.Run("good driver", func(t *testing.T) {
-		db := setupDB(t)
+		db := setupDBConn(t)
 		defer db.Close()
-		if _, err := pglock.New(db, pglock.WithLeaseDuration(time.Second), pglock.WithHeartbeatFrequency(time.Second)); !errors.Is(err, pglock.ErrDurationTooSmall) {
+		if _, err := pglock.New(db, pglock.WithLeaseDuration(time.Second), pglock.WithHeartbeatFrequency(time.Second), pglock.WithCustomTable(randStr())); !errors.Is(err, pglock.ErrDurationTooSmall) {
 			t.Fatal("got unexpected error when the client was misconfigured:", err)
 		}
 	})
@@ -1255,7 +1264,7 @@ func TestStaleAfterRelease(t *testing.T) {
 
 func TestOverflowSequence(t *testing.T) {
 	t.Parallel()
-	db := setupDB(t)
+	db := setupDBConn(t)
 	defer db.Close()
 	tableName := randStr()
 	defer func() {
