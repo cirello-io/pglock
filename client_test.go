@@ -48,34 +48,45 @@ func init() {
 
 var dsn = flag.String("dsn", "postgres://postgres@localhost/postgres?sslmode=disable", "connection string to the test database server")
 
-func setupDB(tb testing.TB, options ...pglock.ClientOption) *sql.DB {
+func setupDBConn(tb testing.TB) *sql.DB {
 	tb.Helper()
 	db, err := sql.Open("postgres", *dsn)
 	if err != nil {
 		tb.Fatal("cannot connect to test database server:", err)
 	}
-	c, err := pglock.New(db, options...)
+	return db
+}
+
+func setupDB(tb testing.TB, options ...pglock.ClientOption) (*sql.DB, string) {
+	tb.Helper()
+	tableName := randStr()
+	db, err := sql.Open("postgres", *dsn)
+	if err != nil {
+		tb.Fatal("cannot connect to test database server:", err)
+	}
+	c, err := pglock.New(db, append([]pglock.ClientOption{pglock.WithCustomTable(tableName)}, options...)...)
 	if err != nil {
 		tb.Fatal("cannot connect:", err)
 	}
 	if err := c.TryCreateTable(); err != nil {
 		tb.Fatal("attempt to create table failed:", err)
 	}
-	return db
+	return db, tableName
 }
 
-func setupCustomDB(t *testing.T, driver string) *sql.DB {
+func setupCustomDB(t *testing.T, driver string, options ...pglock.ClientOption) (*sql.DB, string) {
 	t.Helper()
+	tableName := randStr()
 	db, err := sql.Open(driver, *dsn)
 	if err != nil {
 		t.Fatal("cannot connect to test database server:", err)
 	}
-	c, err := pglock.UnsafeNew(db)
+	c, err := pglock.UnsafeNew(db, append([]pglock.ClientOption{pglock.WithCustomTable(tableName)}, options...)...)
 	if err != nil {
 		t.Fatal("cannot connect:", err)
 	}
 	_ = c.CreateTable()
-	return db
+	return db, tableName
 }
 
 func tableInDB(db *sql.DB, tableName string) (bool, error) {
@@ -97,7 +108,7 @@ func tableInDB(db *sql.DB, tableName string) (bool, error) {
 }
 
 func TestDropTable(t *testing.T) {
-	db := setupDB(t)
+	db, _ := setupDB(t, pglock.WithCustomTable(pglock.DefaultTableName))
 	defer db.Close()
 	t.Run("default name", func(t *testing.T) {
 		c, err := pglock.New(db)
@@ -204,9 +215,9 @@ func TestNew(t *testing.T) {
 		}
 	})
 	t.Run("good driver", func(t *testing.T) {
-		db := setupDB(t)
+		db := setupDBConn(t)
 		defer db.Close()
-		if _, err := pglock.New(db, pglock.WithLeaseDuration(time.Second), pglock.WithHeartbeatFrequency(time.Second)); !errors.Is(err, pglock.ErrDurationTooSmall) {
+		if _, err := pglock.New(db, pglock.WithLeaseDuration(time.Second), pglock.WithHeartbeatFrequency(time.Second), pglock.WithCustomTable(randStr())); !errors.Is(err, pglock.ErrDurationTooSmall) {
 			t.Fatal("got unexpected error when the client was misconfigured:", err)
 		}
 	})
@@ -224,9 +235,9 @@ func TestNew(t *testing.T) {
 func TestOpen(t *testing.T) {
 	t.Parallel()
 	t.Run("good dsn", func(t *testing.T) {
-		db := setupDB(t)
+		db, tableName := setupDB(t)
 		defer db.Close()
-		if _, err := pglock.New(db, pglock.WithLeaseDuration(time.Second), pglock.WithHeartbeatFrequency(time.Second)); !errors.Is(err, pglock.ErrDurationTooSmall) {
+		if _, err := pglock.New(db, pglock.WithLeaseDuration(time.Second), pglock.WithHeartbeatFrequency(time.Second), pglock.WithCustomTable(tableName)); !errors.Is(err, pglock.ErrDurationTooSmall) {
 			t.Fatal("got unexpected error when the client was misconfigured")
 		}
 	})
@@ -235,7 +246,7 @@ func TestOpen(t *testing.T) {
 
 func TestFailIfLocked(t *testing.T) {
 	t.Parallel()
-	db := setupDB(t)
+	db, tableName := setupDB(t)
 	defer db.Close()
 	name := randStr()
 	c, err := pglock.New(
@@ -243,6 +254,7 @@ func TestFailIfLocked(t *testing.T) {
 		pglock.WithLogger(&testLogger{t}),
 		pglock.WithLeaseDuration(5*time.Second),
 		pglock.WithHeartbeatFrequency(1*time.Second),
+		pglock.WithCustomTable(tableName),
 	)
 	if err != nil {
 		t.Fatal("cannot create lock client:", err)
@@ -261,7 +273,7 @@ func TestFailIfLocked(t *testing.T) {
 func TestCustomHeartbeatContext(t *testing.T) {
 	t.Parallel()
 	t.Run("custom context", func(t *testing.T) {
-		db := setupDB(t)
+		db, tableName := setupDB(t)
 		defer db.Close()
 		name := randStr()
 		const heartbeatFrequency = 2 * time.Second
@@ -270,6 +282,7 @@ func TestCustomHeartbeatContext(t *testing.T) {
 			pglock.WithLogger(&testLogger{t}),
 			pglock.WithLeaseDuration(heartbeatFrequency*3),
 			pglock.WithHeartbeatFrequency(heartbeatFrequency),
+			pglock.WithCustomTable(tableName),
 		)
 		if err != nil {
 			t.Fatal("cannot create lock client:", err)
@@ -290,7 +303,7 @@ func TestCustomHeartbeatContext(t *testing.T) {
 		}
 	})
 	t.Run("inherited context", func(t *testing.T) {
-		db := setupDB(t)
+		db, tableName := setupDB(t)
 		defer db.Close()
 		name := randStr()
 		const heartbeatFrequency = 2 * time.Second
@@ -299,6 +312,7 @@ func TestCustomHeartbeatContext(t *testing.T) {
 			pglock.WithLogger(&testLogger{t}),
 			pglock.WithLeaseDuration(heartbeatFrequency*3),
 			pglock.WithHeartbeatFrequency(heartbeatFrequency),
+			pglock.WithCustomTable(tableName),
 		)
 		if err != nil {
 			t.Fatal("cannot create lock client:", err)
@@ -320,7 +334,7 @@ func TestCustomHeartbeatContext(t *testing.T) {
 
 func TestKeepOnRelease(t *testing.T) {
 	t.Parallel()
-	db := setupDB(t)
+	db, tableName := setupDB(t)
 	defer db.Close()
 	name := randStr()
 	c, err := pglock.New(
@@ -328,6 +342,7 @@ func TestKeepOnRelease(t *testing.T) {
 		pglock.WithLogger(&testLogger{t}),
 		pglock.WithLeaseDuration(5*time.Second),
 		pglock.WithHeartbeatFrequency(1*time.Second),
+		pglock.WithCustomTable(tableName),
 	)
 	if err != nil {
 		t.Fatal("cannot create lock client:", err)
@@ -354,7 +369,7 @@ func TestKeepOnRelease(t *testing.T) {
 
 func TestClose(t *testing.T) {
 	t.Parallel()
-	db := setupDB(t)
+	db, tableName := setupDB(t)
 	defer db.Close()
 	name := randStr()
 	c, err := pglock.New(
@@ -362,6 +377,7 @@ func TestClose(t *testing.T) {
 		pglock.WithLogger(&testLogger{t}),
 		pglock.WithLeaseDuration(5*time.Second),
 		pglock.WithHeartbeatFrequency(1*time.Second),
+		pglock.WithCustomTable(tableName),
 	)
 	if err != nil {
 		t.Fatal("cannot create lock client:", err)
@@ -379,7 +395,7 @@ func TestClose(t *testing.T) {
 
 func TestAcquire(t *testing.T) {
 	t.Parallel()
-	db := setupDB(t)
+	db, tableName := setupDB(t)
 	defer db.Close()
 	name := randStr()
 	const heartbeatFrequency = 1 * time.Second
@@ -388,6 +404,7 @@ func TestAcquire(t *testing.T) {
 		pglock.WithLogger(&testLogger{t}),
 		pglock.WithLeaseDuration(5*time.Second),
 		pglock.WithHeartbeatFrequency(heartbeatFrequency),
+		pglock.WithCustomTable(tableName),
 	)
 	if err != nil {
 		t.Fatal("cannot create lock client:", err)
@@ -426,12 +443,13 @@ func TestAcquire(t *testing.T) {
 func TestGet(t *testing.T) {
 	t.Parallel()
 	t.Run("happy path - data", func(t *testing.T) {
-		db := setupDB(t, pglock.WithCustomTable("TestGetHappyPathData"))
+		db, _ := setupDB(t, pglock.WithCustomTable("TestGetHappyPathData"))
 		defer db.Close()
 		name := randStr()
 		c, err := pglock.New(
 			db,
 			pglock.WithLogger(&testLogger{t}),
+			pglock.WithCustomTable("TestGetHappyPathData"),
 		)
 		if err != nil {
 			t.Fatal("cannot create lock client:", err)
@@ -451,7 +469,7 @@ func TestGet(t *testing.T) {
 		}
 	})
 	t.Run("happy path - lock", func(t *testing.T) {
-		db := setupDB(t, pglock.WithCustomTable("TestGetHappyPathLock"))
+		db, _ := setupDB(t, pglock.WithCustomTable("TestGetHappyPathLock"))
 		defer db.Close()
 		name := randStr()
 		const expectedOwner = "custom-owner"
@@ -459,6 +477,7 @@ func TestGet(t *testing.T) {
 			db,
 			pglock.WithLogger(&testLogger{t}),
 			pglock.WithOwner(expectedOwner),
+			pglock.WithCustomTable("TestGetHappyPathLock"),
 		)
 		if err != nil {
 			t.Fatal("cannot create lock client:", err)
@@ -480,12 +499,13 @@ func TestGet(t *testing.T) {
 		}
 	})
 	t.Run("unknown key - data", func(t *testing.T) {
-		db := setupDB(t, pglock.WithCustomTable("TestGetUnknownKeyData"))
+		db, _ := setupDB(t, pglock.WithCustomTable("TestGetUnknownKeyData"))
 		defer db.Close()
 		name := "lock-404"
 		c, err := pglock.New(
 			db,
 			pglock.WithLogger(&testLogger{t}),
+			pglock.WithCustomTable("TestGetUnknownKeyData"),
 		)
 		if err != nil {
 			t.Fatal("cannot create lock client:", err)
@@ -502,13 +522,14 @@ func TestGet(t *testing.T) {
 
 func TestLockData(t *testing.T) {
 	t.Parallel()
-	db := setupDB(t)
+	db, tableName := setupDB(t)
 	defer db.Close()
 	t.Run("reuse lock data", func(t *testing.T) {
 		name := randStr()
 		c, err := pglock.New(
 			db,
 			pglock.WithLogger(&testLogger{t}),
+			pglock.WithCustomTable(tableName),
 		)
 		if err != nil {
 			t.Fatal("cannot create lock client:", err)
@@ -538,6 +559,7 @@ func TestLockData(t *testing.T) {
 		c, err := pglock.New(
 			db,
 			pglock.WithLogger(&testLogger{t}),
+			pglock.WithCustomTable(tableName),
 		)
 		if err != nil {
 			t.Fatal("cannot create lock client:", err)
@@ -566,7 +588,7 @@ func TestLockData(t *testing.T) {
 
 func TestCustomTable(t *testing.T) {
 	t.Parallel()
-	db := setupDB(t)
+	db := setupDBConn(t)
 	defer db.Close()
 	t.Run("happy path", func(t *testing.T) {
 		tableName := randStr()
@@ -616,7 +638,7 @@ func TestCustomTable(t *testing.T) {
 
 func TestCustomTableIdemPotent(t *testing.T) {
 	t.Parallel()
-	db := setupDB(t)
+	db := setupDBConn(t)
 	defer db.Close()
 	t.Run("happy path", func(t *testing.T) {
 		tableName := randStr()
@@ -665,7 +687,7 @@ func TestCustomTableIdemPotent(t *testing.T) {
 }
 
 func TestCanceledContext(t *testing.T) {
-	db := setupDB(t)
+	db, tableName := setupDB(t)
 	defer db.Close()
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -673,6 +695,7 @@ func TestCanceledContext(t *testing.T) {
 	c, err := pglock.New(
 		db,
 		pglock.WithLogger(&testLogger{t}),
+		pglock.WithCustomTable(tableName),
 	)
 	if err != nil {
 		t.Fatal("cannot create lock client:", err)
@@ -684,7 +707,7 @@ func TestCanceledContext(t *testing.T) {
 
 func TestDo(t *testing.T) {
 	t.Parallel()
-	db := setupDB(t)
+	db, tableName := setupDB(t)
 	defer db.Close()
 	t.Run("lost lock", func(t *testing.T) {
 		const heartbeatFrequency = 1 * time.Second
@@ -694,6 +717,7 @@ func TestDo(t *testing.T) {
 			pglock.WithLogger(&testLogger{t}),
 			pglock.WithLeaseDuration(5*time.Second),
 			pglock.WithHeartbeatFrequency(heartbeatFrequency),
+			pglock.WithCustomTable(tableName),
 		)
 		if err != nil {
 			t.Fatal("cannot create lock client:", err)
@@ -729,7 +753,7 @@ func TestDo(t *testing.T) {
 		default:
 		}
 		t.Log("directly releasing lock")
-		if err := releaseLockByName(db, name); err != nil {
+		if err := releaseLockByName(db, tableName, name); err != nil {
 			t.Fatalf("cannot forcefully release lock: %v", err)
 		}
 		wg.Wait()
@@ -743,6 +767,7 @@ func TestDo(t *testing.T) {
 			pglock.WithLogger(&testLogger{t}),
 			pglock.WithLeaseDuration(5*time.Second),
 			pglock.WithHeartbeatFrequency(heartbeatFrequency),
+			pglock.WithCustomTable(tableName),
 		)
 		if err != nil {
 			t.Fatal("cannot create lock client:", err)
@@ -767,6 +792,7 @@ func TestDo(t *testing.T) {
 			pglock.WithLogger(&testLogger{t}),
 			pglock.WithLeaseDuration(5*time.Second),
 			pglock.WithHeartbeatFrequency(heartbeatFrequency),
+			pglock.WithCustomTable(tableName),
 		)
 		if err != nil {
 			t.Fatal("cannot create lock client:", err)
@@ -789,6 +815,7 @@ func TestDo(t *testing.T) {
 			pglock.WithLogger(&testLogger{t}),
 			pglock.WithLeaseDuration(5*time.Second),
 			pglock.WithHeartbeatFrequency(heartbeatFrequency),
+			pglock.WithCustomTable(tableName),
 		)
 		if err != nil {
 			t.Fatal("cannot create lock client:", err)
@@ -817,6 +844,7 @@ func TestDo(t *testing.T) {
 			pglock.WithLogger(&testLogger{t}),
 			pglock.WithLeaseDuration(5*time.Second),
 			pglock.WithHeartbeatFrequency(0),
+			pglock.WithCustomTable(tableName),
 		)
 		if err != nil {
 			t.Fatal("cannot create lock client:", err)
@@ -849,7 +877,7 @@ func TestDo(t *testing.T) {
 
 func TestOwner(t *testing.T) {
 	t.Parallel()
-	db := setupDB(t)
+	db, tableName := setupDB(t)
 	defer db.Close()
 	const expectedOwner = "custom-owner"
 	lockName := randStr()
@@ -859,6 +887,7 @@ func TestOwner(t *testing.T) {
 		pglock.WithLeaseDuration(5*time.Second),
 		pglock.WithHeartbeatFrequency(1*time.Second),
 		pglock.WithOwner(expectedOwner),
+		pglock.WithCustomTable(tableName),
 	)
 	if err != nil {
 		t.Fatal("cannot create lock client:", err)
@@ -871,7 +900,7 @@ func TestOwner(t *testing.T) {
 	if owner := l1.Owner(); owner != expectedOwner {
 		t.Fatalf("owner not stored in the acquired lock: %s", owner)
 	}
-	row := db.QueryRow("SELECT owner FROM "+pglock.DefaultTableName+" WHERE name = $1", lockName)
+	row := db.QueryRow("SELECT owner FROM "+tableName+" WHERE name = $1", lockName)
 	var foundOwner string
 	if err := row.Scan(&foundOwner); err != nil {
 		t.Fatalf("cannot load owner from the database: %v", err)
@@ -881,10 +910,10 @@ func TestOwner(t *testing.T) {
 	}
 }
 
-func releaseLockByName(db *sql.DB, name string) error {
+func releaseLockByName(db *sql.DB, tblName, name string) error {
 	const serializationErrorCode = "40001"
 	for {
-		_, err := db.Exec("UPDATE locks SET record_version_number = NULL WHERE name = $1", name)
+		_, err := db.Exec("UPDATE "+tblName+" SET record_version_number = NULL WHERE name = $1", name)
 		if errPQ := (&pq.Error{}); errors.As(err, &errPQ) {
 			if errPQ.Code == serializationErrorCode {
 				continue
@@ -898,7 +927,7 @@ func releaseLockByName(db *sql.DB, name string) error {
 }
 
 func TestSendHeartbeat(t *testing.T) {
-	db := setupDB(t)
+	db, tableName := setupDB(t)
 	defer db.Close()
 	t.Run("bad sendHeartbeat", func(t *testing.T) {
 		c, err := pglock.New(
@@ -906,6 +935,7 @@ func TestSendHeartbeat(t *testing.T) {
 			pglock.WithLogger(&testLogger{t}),
 			pglock.WithLeaseDuration(5*time.Second),
 			pglock.WithHeartbeatFrequency(0),
+			pglock.WithCustomTable(tableName),
 		)
 		if err != nil {
 			t.Fatal("cannot create lock client:", err)
@@ -930,6 +960,7 @@ func TestSendHeartbeat(t *testing.T) {
 			pglock.WithLogger(&testLogger{t}),
 			pglock.WithLeaseDuration(5*time.Second),
 			pglock.WithHeartbeatFrequency(0),
+			pglock.WithCustomTable(tableName),
 		)
 		if err != nil {
 			t.Fatal("cannot create lock client:", err)
@@ -953,13 +984,14 @@ func TestSendHeartbeat(t *testing.T) {
 }
 
 func testSendHeartbeatRacy(t *testing.T) {
-	db := setupDB(t)
+	db, tableName := setupDB(t)
 	defer db.Close()
 	c, err := pglock.New(
 		db,
 		pglock.WithLogger(&testLogger{t}),
 		pglock.WithLeaseDuration(5*time.Second),
 		pglock.WithHeartbeatFrequency(1),
+		pglock.WithCustomTable(tableName),
 	)
 	if err != nil {
 		t.Fatal("cannot create lock client:", err)
@@ -993,7 +1025,7 @@ func testSendHeartbeatRacy(t *testing.T) {
 }
 
 func TestReleaseLostLock(t *testing.T) {
-	db := setupDB(t)
+	db, tableName := setupDB(t)
 	defer db.Close()
 	name := randStr()
 	c, err := pglock.New(
@@ -1001,6 +1033,7 @@ func TestReleaseLostLock(t *testing.T) {
 		pglock.WithLogger(&testLogger{t}),
 		pglock.WithLeaseDuration(5*time.Second),
 		pglock.WithHeartbeatFrequency(0),
+		pglock.WithCustomTable(tableName),
 	)
 	if err != nil {
 		t.Fatal("cannot create lock client:", err)
@@ -1010,7 +1043,7 @@ func TestReleaseLostLock(t *testing.T) {
 		t.Fatal("cannot acquire lock:", err)
 	}
 	t.Log("directly releasing lock")
-	if err := releaseLockByName(db, name); err != nil {
+	if err := releaseLockByName(db, tableName, name); err != nil {
 		t.Fatalf("cannot forcefully release lock: %v", err)
 	}
 	t.Log(c.Release(l))
@@ -1020,13 +1053,14 @@ func TestReleaseLostLock(t *testing.T) {
 }
 
 func TestIssue29(t *testing.T) {
-	testfunc := func(t *testing.T, db *sql.DB) {
+	testfunc := func(t *testing.T, db *sql.DB, tableName string) {
 		t.Helper()
 		lockName := randStr()
 		c, err := pglock.UnsafeNew(
 			db,
 			pglock.WithLeaseDuration(2*time.Second),
 			pglock.WithHeartbeatFrequency(0),
+			pglock.WithCustomTable(tableName),
 		)
 		if err != nil {
 			t.Fatal("cannot create lock client:", err)
@@ -1067,20 +1101,20 @@ func TestIssue29(t *testing.T) {
 		}
 	}
 	t.Run("lib/pq", func(t *testing.T) {
-		db := setupDB(t)
+		db, tableName := setupDB(t)
 		defer db.Close()
-		testfunc(t, db)
+		testfunc(t, db, tableName)
 	})
 	t.Run("jackc/pgx", func(t *testing.T) {
-		db := setupCustomDB(t, "pgx")
+		db, tableName := setupCustomDB(t, "pgx")
 		defer db.Close()
-		testfunc(t, db)
+		testfunc(t, db, tableName)
 	})
 }
 
 func parallelAcquire(tb testing.TB, maxConcurrency int) {
 	tb.Helper()
-	db := setupDB(tb)
+	db, tableName := setupDB(tb)
 	defer db.Close()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -1092,6 +1126,7 @@ func parallelAcquire(tb testing.TB, maxConcurrency int) {
 				pglock.WithLogger(&discardLogging{}),
 				pglock.WithLeaseDuration(5*time.Second),
 				pglock.WithHeartbeatFrequency(1),
+				pglock.WithCustomTable(tableName),
 			)
 			if err != nil {
 				err := fmt.Errorf("cannot start lock client: %w", err)
@@ -1212,17 +1247,17 @@ func TestGetAllLocks(t *testing.T) {
 }
 
 func TestStaleAfterRelease(t *testing.T) {
-	db := setupDB(t)
+	db, tableName := setupDB(t)
 	defer db.Close()
 	db.SetMaxOpenConns(30)
 	db.SetMaxIdleConns(10)
 	db.SetConnMaxLifetime(30 * time.Minute)
 
-	c, err := pglock.New(db, pglock.WithOwner("TestStaleAfterRelease"))
+	c, err := pglock.New(db, pglock.WithOwner("TestStaleAfterRelease"), pglock.WithCustomTable(tableName))
 	if err != nil {
 		t.Fatal("cannot connect:", err)
 	}
-	if _, err := db.Exec("DELETE FROM " + pglock.DefaultTableName + " WHERE owner = 'TestStaleAfterRelease'"); err != nil {
+	if _, err := db.Exec("DELETE FROM " + tableName + " WHERE owner = 'TestStaleAfterRelease'"); err != nil {
 		t.Fatal("cannot reset table:", err)
 	}
 	var (
@@ -1255,7 +1290,7 @@ func TestStaleAfterRelease(t *testing.T) {
 
 func TestOverflowSequence(t *testing.T) {
 	t.Parallel()
-	db := setupDB(t)
+	db := setupDBConn(t)
 	defer db.Close()
 	tableName := randStr()
 	defer func() {
