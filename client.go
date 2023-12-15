@@ -607,7 +607,7 @@ func unwrapUntilSQLState(err error) (interface{ SQLState() string }, bool) {
 	}
 }
 
-func hasSQLState(v any) (interface{ SQLState() string }, bool) {
+func hasSQLState(v interface{}) (interface{ SQLState() string }, bool) {
 	sqlState, ok := v.(interface{ SQLState() string })
 	return sqlState, ok
 }

@@ -25,18 +25,18 @@ type Logger interface {
 
 // LevelLogger is used for internal inspection of the lock client.
 type LevelLogger interface {
-	Debug(msg string, args ...any)
-	Error(msg string, args ...any)
+	Debug(msg string, args ...interface{})
+	Error(msg string, args ...interface{})
 }
 
 type flatLogger struct {
 	l Logger
 }
 
-func (fl *flatLogger) Debug(msg string, args ...any) {
+func (fl *flatLogger) Debug(msg string, args ...interface{}) {
 	fl.l.Println(fmt.Sprintf(msg, args...))
 }
 
-func (fl *flatLogger) Error(msg string, args ...any) {
+func (fl *flatLogger) Error(msg string, args ...interface{}) {
 	fl.l.Println(fmt.Sprintf(msg, args...))
 }

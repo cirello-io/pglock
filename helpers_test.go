@@ -55,12 +55,12 @@ type testLevelLogger struct {
 	t testing.TB
 }
 
-func (t *testLevelLogger) Debug(msg string, args ...any) {
+func (t *testLevelLogger) Debug(msg string, args ...interface{}) {
 	t.t.Helper()
 	t.t.Logf("DEBUG: "+msg, args...)
 }
 
-func (t *testLevelLogger) Error(msg string, args ...any) {
+func (t *testLevelLogger) Error(msg string, args ...interface{}) {
 	t.t.Helper()
 	t.t.Logf("ERROR: "+msg, args...)
 }
