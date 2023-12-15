@@ -13,6 +13,7 @@ jobs:
     strategy:
       matrix:
         postgres-version: ['latest', 16, 15, 14, 13, 12]
+        go-version: ['stable','oldstable']
     runs-on: ubuntu-latest
 
     services:
@@ -32,7 +33,7 @@ jobs:
     - name: Setup Go
       uses: actions/setup-go@v4
       with:
-        go-version: 'stable'
+        go-version: ${{ matrix.go-version }}
 
     - name: golangci-lint cache
       uses: actions/cache@v3

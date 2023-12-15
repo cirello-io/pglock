@@ -98,3 +98,9 @@ the lock is stale and expire it.
 
 What this means is that, even if two different machines disagree about what time
 it is, they will still avoid clobbering each other's locks.
+
+## Go Version Compatibility Promise
+
+This package follows the same guidance as the Go's:
+
+> Each major Go release is supported until there are two newer major releases. For example, Go 1.5 was supported until the Go 1.7 release, and Go 1.6 was supported until the Go 1.8 release. We fix critical problems, including critical security problems, in supported releases as needed by issuing minor revisions (for example, Go 1.6.1, Go 1.6.2, and so on).
