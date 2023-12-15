@@ -244,7 +244,8 @@ func TestOpen(t *testing.T) {
 
 func TestFailIfLocked(t *testing.T) {
 	t.Parallel()
-	db := setupDB(t)
+	tableName := randStr()
+	db := setupDB(t, pglock.WithCustomTable(tableName))
 	defer db.Close()
 	name := randStr()
 	c, err := pglock.New(
@@ -252,6 +253,7 @@ func TestFailIfLocked(t *testing.T) {
 		pglock.WithLogger(&testLogger{t}),
 		pglock.WithLeaseDuration(5*time.Second),
 		pglock.WithHeartbeatFrequency(1*time.Second),
+		pglock.WithCustomTable(tableName),
 	)
 	if err != nil {
 		t.Fatal("cannot create lock client:", err)
