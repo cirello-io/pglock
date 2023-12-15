@@ -900,7 +900,7 @@ func TestOwner(t *testing.T) {
 	if owner := l1.Owner(); owner != expectedOwner {
 		t.Fatalf("owner not stored in the acquired lock: %s", owner)
 	}
-	row := db.QueryRow("SELECT owner FROM "+pglock.DefaultTableName+" WHERE name = $1", lockName)
+	row := db.QueryRow("SELECT owner FROM "+tableName+" WHERE name = $1", lockName)
 	var foundOwner string
 	if err := row.Scan(&foundOwner); err != nil {
 		t.Fatalf("cannot load owner from the database: %v", err)
@@ -1257,7 +1257,7 @@ func TestStaleAfterRelease(t *testing.T) {
 	if err != nil {
 		t.Fatal("cannot connect:", err)
 	}
-	if _, err := db.Exec("DELETE FROM " + pglock.DefaultTableName + " WHERE owner = 'TestStaleAfterRelease'"); err != nil {
+	if _, err := db.Exec("DELETE FROM " + tableName + " WHERE owner = 'TestStaleAfterRelease'"); err != nil {
 		t.Fatal("cannot reset table:", err)
 	}
 	var (
