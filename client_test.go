@@ -31,7 +31,7 @@ import (
 	"time"
 
 	"cirello.io/pglock"
-	_ "github.com/jackc/pgx/v4/stdlib"
+	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/lib/pq"
 	"golang.org/x/sync/errgroup"
 )
