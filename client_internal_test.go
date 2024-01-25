@@ -109,7 +109,7 @@ func TestDBErrorHandling(t *testing.T) {
 		if err != nil {
 			t.Fatal("cannot create mock:", err)
 		}
-		client.db = db
+		client.db = FromSQLDB(db)
 		ctx, cancel := context.WithCancel(context.Background())
 		return client, mock, &Lock{
 			heartbeatContext: ctx,

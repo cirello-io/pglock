@@ -29,6 +29,7 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/lib/pq"
 )
 
@@ -51,7 +52,7 @@ const DefaultHeartbeatFrequency = 5 * time.Second
 // configured to talk to leaders and not followers in the case of replicated
 // setups.
 type Client struct {
-	db                 *sql.DB
+	db                 sqlLike
 	tableName          string
 	leaseDuration      time.Duration
 	heartbeatFrequency time.Duration
@@ -67,7 +68,15 @@ func New(db *sql.DB, opts ...ClientOption) (*Client, error) {
 	} else if _, ok := db.Driver().(*pq.Driver); !ok {
 		return nil, ErrNotPostgreSQLDriver
 	}
-	return newClient(db, opts...)
+	return newClient(FromSQLDB(db), opts...)
+}
+
+// NewPGXPool returns a locker client from the given pgxpool connection.
+func NewPGXPool(db *pgxpool.Pool, opts ...ClientOption) (*Client, error) {
+	if db == nil {
+		return nil, ErrNotPostgreSQLDriver
+	}
+	return newClient(FromPGXPool(db), opts...)
 }
 
 // UnsafeNew returns a locker client from the given database connection. This
@@ -76,10 +85,20 @@ func UnsafeNew(db *sql.DB, opts ...ClientOption) (*Client, error) {
 	if db == nil {
 		return nil, ErrNotPostgreSQLDriver
 	}
+	return newClient(FromSQLDB(db), opts...)
+}
+
+// UnsafeGenericNew returns a locker client from the given database-like connection. This
+// function does not check if db holds a ratified postgreSQL driver.
+// Use this function if you want to use a different driver than lib/pq.
+func UnsafeGenericNew(db sqlLike, opts ...ClientOption) (*Client, error) {
+	if db == nil {
+		return nil, ErrNotPostgreSQLDriver
+	}
 	return newClient(db, opts...)
 }
 
-func newClient(db *sql.DB, opts ...ClientOption) (*Client, error) {
+func newClient(db sqlLike, opts ...ClientOption) (*Client, error) {
 	c := &Client{
 		db:                 db,
 		tableName:          DefaultTableName,
@@ -477,7 +496,7 @@ func (c *Client) getLock(ctx context.Context, name string) (*Lock, error) {
 	return l, typedError(err, "cannot load the data of this lock")
 }
 
-func (c *Client) getNextRVN(ctx context.Context, db *sql.DB) (int64, error) {
+func (c *Client) getNextRVN(ctx context.Context, db sqlLike) (int64, error) {
 	rowRVN := db.QueryRowContext(ctx, `SELECT nextval('`+c.tableName+`_rvn')`)
 	var rvn int64
 	err := rowRVN.Scan(&rvn)

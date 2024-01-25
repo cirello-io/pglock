@@ -81,6 +81,7 @@ func setupCustomDB(t *testing.T, driver string, options ...pglock.ClientOption) 
 	if err != nil {
 		t.Fatal("cannot connect to test database server:", err)
 	}
+
 	c, err := pglock.UnsafeNew(db, append([]pglock.ClientOption{pglock.WithCustomTable(tableName)}, options...)...)
 	if err != nil {
 		t.Fatal("cannot connect:", err)
