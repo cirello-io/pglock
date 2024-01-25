@@ -110,7 +110,7 @@ type pgxTxWrapper struct {
 
 func (t *pgxTxWrapper) ExecContext(ctx context.Context, sql string, arguments ...any) (resultLike, error) {
 	ct, err := t.Tx.Exec(ctx, sql, arguments...)
-	return &pgxResultWrapper{CommandTag: &ct}, err
+	return &pgxResultWrapper{CommandTag: ct}, err
 }
 
 func (t *pgxTxWrapper) QueryRowContext(ctx context.Context, query string, args ...any) rowLike {
@@ -119,6 +119,10 @@ func (t *pgxTxWrapper) QueryRowContext(ctx context.Context, query string, args .
 
 func (t *pgxTxWrapper) Commit() error {
 	return t.Tx.Commit(context.Background())
+}
+
+func (t *pgxTxWrapper) Rollback() error {
+	return t.Tx.Rollback(context.Background())
 }
 
 type pgxRowsWrapper struct {
@@ -131,7 +135,7 @@ func (p *pgxRowsWrapper) Close() error {
 }
 
 type pgxResultWrapper struct {
-	*pgconn.CommandTag
+	pgconn.CommandTag
 }
 
 func (r *pgxResultWrapper) RowsAffected() (int64, error) {

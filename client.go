@@ -246,6 +246,7 @@ func (c *Client) storeAcquire(ctx context.Context, l *Lock) error {
 	if err != nil {
 		return typedError(err, "cannot create transaction for lock acquisition")
 	}
+	defer tx.Rollback()
 	c.log.Debug("storeAcquire in: %v %v %v %v", l.name, rvn, l.data, l.recordVersionNumber)
 	defer func() {
 		c.log.Debug("storeAcquire out: %v %v %v %v", l.name, rvn, l.data, l.recordVersionNumber)
@@ -335,6 +336,8 @@ func (c *Client) storeRelease(ctx context.Context, l *Lock) error {
 	if err != nil {
 		return typedError(err, "cannot create transaction for lock acquisition")
 	}
+	defer tx.Rollback()
+
 	result, err := tx.ExecContext(ctx, `
 		UPDATE
 			`+c.tableName+`
@@ -415,6 +418,8 @@ func (c *Client) storeHeartbeat(ctx context.Context, l *Lock) error {
 	if err != nil {
 		return typedError(err, "cannot create transaction for lock acquisition")
 	}
+	defer tx.Rollback()
+
 	result, err := tx.ExecContext(ctx, `
 		UPDATE
 			`+c.tableName+`

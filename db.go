@@ -16,6 +16,7 @@ type sqlLike interface {
 type txLike interface {
 	ExecContext(ctx context.Context, sql string, arguments ...any) (resultLike, error)
 	QueryRowContext(ctx context.Context, query string, args ...any) rowLike
+	Rollback() error
 	Commit() error
 }
 
