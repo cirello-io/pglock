@@ -362,7 +362,9 @@ func (c *Client) heartbeat(ctx context.Context, l *Lock) {
 		if err := ctx.Err(); err != nil {
 			return
 		} else if err := c.SendHeartbeat(ctx, l); err != nil {
-			defer c.log.Error("heartbeat missed: %v", err)
+			if !errors.Is(err, context.Canceled) {
+				defer c.log.Error("heartbeat missed: %v", err)
+			}
 			return
 		}
 		waitFor(ctx, c.heartbeatFrequency)
