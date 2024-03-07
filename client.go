@@ -359,10 +359,10 @@ func (c *Client) heartbeat(ctx context.Context, l *Lock) {
 	c.log.Debug("heartbeat started: %v", l.name)
 	defer c.log.Debug("heartbeat stopped: %v", l.name)
 	for {
-		if err := ctx.Err(); err != nil {
-			return
-		} else if err := c.SendHeartbeat(ctx, l); err != nil {
+		if err := c.SendHeartbeat(ctx, l); err != nil && !isContextError(err) {
 			defer c.log.Error("heartbeat missed: %v", err)
+			return
+		} else if err := ctx.Err(); err != nil {
 			return
 		}
 		waitFor(ctx, c.heartbeatFrequency)
@@ -617,4 +617,8 @@ func waitFor(ctx context.Context, d time.Duration) {
 	case <-time.After(d):
 	case <-ctx.Done():
 	}
+}
+
+func isContextError(err error) bool {
+	return errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
 }

@@ -17,6 +17,7 @@ limitations under the License.
 package pglock
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"errors"
@@ -24,6 +25,7 @@ import (
 	"io"
 	"log"
 	"net"
+	"strings"
 	"testing"
 	"time"
 
@@ -330,4 +332,70 @@ func Test_waitFor(t *testing.T) {
 			t.Fatal("did not cancel")
 		}
 	})
+}
+
+func Test_heartbeatLogging(t *testing.T) {
+	t.Run("cancelled", func(t *testing.T) {
+		db, err := sql.Open("postgres", "")
+		if err != nil {
+			t.Fatal("cannot connect to test database server:", err)
+		}
+		logger := &testBufferLogger{}
+		client, _ := New(db, WithHeartbeatFrequency(0), WithLogger(logger))
+		db, mock, err := sqlmock.New()
+		if err != nil {
+			t.Fatal("cannot create mock:", err)
+		}
+		client.db = db
+		ctx, cancel := context.WithCancel(context.Background())
+		fakeLock := &Lock{
+			heartbeatContext: ctx,
+			heartbeatCancel:  cancel,
+			leaseDuration:    time.Minute,
+		}
+		hbCtx, hbCancel := context.WithCancel(context.Background())
+		hbCancel()
+		mock.ExpectQuery(`SELECT nextval\('locks_rvn'\)`).WillReturnError(hbCtx.Err())
+		fakeLock.heartbeatWG.Add(1)
+		client.heartbeat(hbCtx, fakeLock)
+		t.Log(logger.buf.String())
+		if strings.Contains(logger.buf.String(), context.Canceled.Error()) {
+			t.Fatal("must not log context cancellations")
+		}
+	})
+	t.Run("errored", func(t *testing.T) {
+		db, err := sql.Open("postgres", "")
+		if err != nil {
+			t.Fatal("cannot connect to test database server:", err)
+		}
+		logger := &testBufferLogger{}
+		client, _ := New(db, WithHeartbeatFrequency(0), WithLogger(logger))
+		db, mock, err := sqlmock.New()
+		if err != nil {
+			t.Fatal("cannot create mock:", err)
+		}
+		client.db = db
+		ctx, cancel := context.WithCancel(context.Background())
+		fakeLock := &Lock{
+			heartbeatContext: ctx,
+			heartbeatCancel:  cancel,
+			leaseDuration:    time.Minute,
+		}
+		errExpected := errors.New("expected error")
+		mock.ExpectQuery(`SELECT nextval\('locks_rvn'\)`).WillReturnError(errExpected)
+		fakeLock.heartbeatWG.Add(1)
+		client.heartbeat(context.Background(), fakeLock)
+		t.Log(logger.buf.String())
+		if !strings.Contains(logger.buf.String(), errExpected.Error()) {
+			t.Fatal("expected error missing")
+		}
+	})
+}
+
+type testBufferLogger struct {
+	buf bytes.Buffer
+}
+
+func (t *testBufferLogger) Println(v ...interface{}) {
+	fmt.Fprintln(&t.buf, v...)
 }
