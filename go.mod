@@ -19,4 +19,4 @@ require (
 	golang.org/x/text v0.15.0 // indirect
 )
 
-go 1.19
+go 1.21
