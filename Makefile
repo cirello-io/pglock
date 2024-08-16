@@ -1,5 +1,5 @@
 linters:
-	which golangci-lint || (go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.54.2 && echo installed linter)
+	which golangci-lint || (go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.60.1 && echo installed linter)
 	golangci-lint run --disable-all \
 		-E "errcheck" \
 		-E "errname" \
