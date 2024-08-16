@@ -39,7 +39,7 @@ jobs:
       uses: actions/cache@v4
       with:
         path: ~/go/bin/golangci-lint
-        key: ${{ runner.os }}-golangci-lint-v1.54.2
+        key: ${{ runner.os }}-${{ matrix.go-version }}-golangci-lint-v1.60.1
 
     - name: Test
       run: |

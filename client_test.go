@@ -728,7 +728,7 @@ func TestDo(t *testing.T) {
 		lockErr := make(chan error, 1)
 		go func() {
 			defer wg.Done()
-			err = c.Do(context.Background(), name, func(ctx context.Context, l *pglock.Lock) error {
+			err = c.Do(context.Background(), name, func(ctx context.Context, _ *pglock.Lock) error {
 				once := make(chan struct{}, 1)
 				once <- struct{}{}
 				for {
@@ -772,7 +772,7 @@ func TestDo(t *testing.T) {
 		if err != nil {
 			t.Fatal("cannot create lock client:", err)
 		}
-		err = c.Do(context.Background(), name, func(ctx context.Context, l *pglock.Lock) error {
+		err = c.Do(context.Background(), name, func(context.Context, *pglock.Lock) error {
 			for i := 0; i < 5; i++ {
 				t.Log("i = ", i)
 				time.Sleep(1 * time.Second)
@@ -799,7 +799,7 @@ func TestDo(t *testing.T) {
 		}
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
-		err = c.Do(ctx, name, func(ctx context.Context, l *pglock.Lock) error {
+		err = c.Do(ctx, name, func(context.Context, *pglock.Lock) error {
 			return nil
 		})
 		if !errors.Is(err, pglock.ErrNotAcquired) {
@@ -822,7 +822,7 @@ func TestDo(t *testing.T) {
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
-		err = c.Do(context.Background(), name, func(ctx context.Context, l *pglock.Lock) error {
+		err = c.Do(context.Background(), name, func(ctx context.Context, _ *pglock.Lock) error {
 			for {
 				if err := ctx.Err(); err != nil {
 					return err
@@ -852,7 +852,7 @@ func TestDo(t *testing.T) {
 		if _, err := c.Acquire(name); err != nil {
 			t.Fatal("cannot grab lock:", err)
 		}
-		err = c.Do(context.Background(), name, func(ctx context.Context, l *pglock.Lock) error {
+		err = c.Do(context.Background(), name, func(context.Context, *pglock.Lock) error {
 			return errors.New("should not have been executed")
 		}, pglock.FailIfLocked())
 		if !errors.Is(err, pglock.ErrNotAcquired) {
@@ -861,7 +861,7 @@ func TestDo(t *testing.T) {
 		if _, err := c.Acquire(name); err != nil {
 			t.Fatal("cannot grab lock:", err)
 		}
-		err = c.Do(context.Background(), name, func(ctx context.Context, l *pglock.Lock) error {
+		err = c.Do(context.Background(), name, func(context.Context, *pglock.Lock) error {
 			for i := 0; i < 5; i++ {
 				t.Log("i = ", i)
 				time.Sleep(1 * time.Second)
