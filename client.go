@@ -182,7 +182,7 @@ func (c *Client) AcquireContext(ctx context.Context, name string, opts ...LockOp
 		if err := ctx.Err(); err != nil {
 			return nil, ErrNotAcquired
 		}
-		err := c.retry(ctx, func() error { return c.tryAcquire(ctx, l) })
+		err := c.retry(func() error { return c.tryAcquire(ctx, l) })
 		switch {
 		case l.failIfLocked && errors.Is(err, ErrNotAcquired):
 			c.log.Debug("not acquired, exit")
@@ -303,7 +303,7 @@ func (c *Client) Release(l *Lock) error {
 func (c *Client) ReleaseContext(ctx context.Context, l *Lock) error {
 	l.heartbeatCancel()
 	l.heartbeatWG.Wait()
-	err := c.retry(ctx, func() error { return c.storeRelease(ctx, l) })
+	err := c.retry(func() error { return c.storeRelease(ctx, l) })
 	return err
 }
 
@@ -377,7 +377,7 @@ func (c *Client) SendHeartbeat(ctx context.Context, l *Lock) error {
 	if l.isReleased {
 		return ErrLockAlreadyReleased
 	}
-	err := c.retry(ctx, func() error { return c.storeHeartbeat(ctx, l) })
+	err := c.retry(func() error { return c.storeHeartbeat(ctx, l) })
 	if err != nil {
 		l.isReleased = true
 		return fmt.Errorf("cannot send heartbeat (%v): %w", l.name, err)
@@ -444,7 +444,7 @@ func (c *Client) GetDataContext(ctx context.Context, name string) ([]byte, error
 // holding it first.
 func (c *Client) GetContext(ctx context.Context, name string) (*Lock, error) {
 	var l *Lock
-	err := c.retry(ctx, func() error {
+	err := c.retry(func() error {
 		var err error
 		l, err = c.getLock(ctx, name)
 		return err
@@ -486,11 +486,7 @@ func (c *Client) getNextRVN(ctx context.Context, db *sql.DB) (int64, error) {
 
 const maxRetries = 1024
 
-func (c *Client) retry(ctx context.Context, f func() error) error {
-	retryPeriod := c.heartbeatFrequency
-	if retryPeriod == 0 {
-		retryPeriod = c.leaseDuration
-	}
+func (c *Client) retry(f func() error) error {
 	var err error
 	for i := 0; i < maxRetries; i++ {
 		err = f()
@@ -498,7 +494,9 @@ func (c *Client) retry(ctx context.Context, f func() error) error {
 			break
 		}
 		c.log.Debug("bad transaction, retrying: %v", err)
-		waitFor(ctx, retryPeriod)
+		if isContextError(err) {
+			break
+		}
 	}
 	return err
 }
@@ -511,7 +509,7 @@ func (c *Client) GetAllLocks() ([]*ReadOnlyLock, error) {
 // GetAllLocksContext returns all known locks in a read-only fashion.
 func (c *Client) GetAllLocksContext(ctx context.Context) ([]*ReadOnlyLock, error) {
 	var locks []*ReadOnlyLock
-	err := c.retry(ctx, func() error {
+	err := c.retry(func() error {
 		var err error
 		locks, err = c.getAllLocks(ctx)
 		return err

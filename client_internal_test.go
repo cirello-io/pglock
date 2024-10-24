@@ -64,7 +64,7 @@ func TestRetry(t *testing.T) {
 			&FailedPreconditionError{errors.New("failed precondition")},
 			&OtherError{errors.New("other error")},
 		}
-		err := c.retry(context.Background(), func() error {
+		err := c.retry(func() error {
 			var err error
 			err, errs = errs[0], errs[1:]
 			return err
@@ -78,7 +78,7 @@ func TestRetry(t *testing.T) {
 			log: &flatLogger{log.New(io.Discard, "", 0)},
 		}
 		var retries int
-		err := c.retry(context.Background(), func() error {
+		err := c.retry(func() error {
 			retries++
 			return &FailedPreconditionError{errors.New("failed precondition")}
 		})
