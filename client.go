@@ -312,21 +312,34 @@ func (c *Client) storeRelease(ctx context.Context, l *Lock) error {
 	defer l.mu.Unlock()
 	ctx, cancel := context.WithTimeout(ctx, l.leaseDuration)
 	defer cancel()
-	tx, err := c.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
-	if err != nil {
-		return typedError(err, "cannot create transaction for lock acquisition")
-	}
-	result, err := tx.ExecContext(ctx, `
-		UPDATE
-			`+c.tableName+`
-		SET
-			"record_version_number" = NULL
-		WHERE
-			"name" = $1
-			AND "record_version_number" = $2
-	`, l.name, l.recordVersionNumber)
-	if err != nil {
-		return typedError(err, "cannot run query to release lock")
+	var result sql.Result
+	switch l.keepOnRelease {
+	case true:
+		res, err := c.db.ExecContext(ctx, `
+			UPDATE
+				`+c.tableName+`
+			SET
+				"record_version_number" = NULL
+			WHERE
+				"name" = $1
+				AND "record_version_number" = $2
+		`, l.name, l.recordVersionNumber)
+		if err != nil {
+			return typedError(err, "cannot run query to release lock (keep)")
+		}
+		result = res
+	case false:
+		res, err := c.db.ExecContext(ctx, `
+			DELETE FROM
+				`+c.tableName+`
+			WHERE
+				"name" = $1
+				AND "record_version_number" = $2
+		`, l.name, l.recordVersionNumber)
+		if err != nil {
+			return typedError(err, "cannot run query to delete lock (delete)")
+		}
+		result = res
 	}
 	affected, err := result.RowsAffected()
 	if err != nil {
@@ -334,20 +347,6 @@ func (c *Client) storeRelease(ctx context.Context, l *Lock) error {
 	} else if affected == 0 {
 		l.isReleased = true
 		return ErrLockAlreadyReleased
-	}
-	if !l.keepOnRelease {
-		_, err := tx.ExecContext(ctx, `
-		DELETE FROM
-			`+c.tableName+`
-		WHERE
-			"name" = $1
-			AND "record_version_number" IS NULL`, l.name)
-		if err != nil {
-			return typedError(err, "cannot run query to delete lock")
-		}
-	}
-	if err := tx.Commit(); err != nil {
-		return typedError(err, "cannot commit lock release")
 	}
 	l.isReleased = true
 	l.heartbeatCancel()

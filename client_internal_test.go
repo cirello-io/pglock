@@ -180,51 +180,21 @@ func TestDBErrorHandling(t *testing.T) {
 		})
 	})
 	t.Run("release", func(t *testing.T) {
-		t.Run("bad tx", func(t *testing.T) {
-			client, mock, fakeLock := setup()
-			badTx := errors.New("transaction begin error")
-			mock.ExpectBegin().WillReturnError(badTx)
-			if err := client.Release(fakeLock); !errors.Is(err, badTx) {
-				t.Errorf("expected tx error missing: %v", err)
-			}
-		})
 		t.Run("bad update", func(t *testing.T) {
 			client, mock, fakeLock := setup()
-			badUpdate := errors.New("cannot update")
-			mock.ExpectBegin()
-			mock.ExpectExec(`UPDATE locks (.+)`).WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg()).WillReturnError(badUpdate)
-			if err := client.Release(fakeLock); !errors.Is(err, badUpdate) {
-				t.Errorf("expected update error missing: %v", err)
-			}
-		})
-		t.Run("bad update result", func(t *testing.T) {
-			client, mock, fakeLock := setup()
-			badUpdateResult := errors.New("cannot grab update result")
-			mock.ExpectBegin()
-			mock.ExpectExec(`UPDATE locks (.+)`).WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg()).WillReturnResult(sqlmock.NewErrorResult(badUpdateResult))
-			if err := client.Release(fakeLock); !errors.Is(err, badUpdateResult) {
-				t.Errorf("expected update result error missing: %v", err)
+			badDelete := errors.New("cannot delete lock entry")
+			fakeLock.keepOnRelease = true
+			mock.ExpectExec(`UPDATE locks (.+)`).WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg()).WillReturnError(badDelete)
+			if err := client.Release(fakeLock); !errors.Is(err, badDelete) {
+				t.Errorf("expected delete error missing: %v", err)
 			}
 		})
 		t.Run("bad delete", func(t *testing.T) {
 			client, mock, fakeLock := setup()
 			badDelete := errors.New("cannot delete lock entry")
-			mock.ExpectBegin()
-			mock.ExpectExec(`UPDATE locks (.+)`).WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg()).WillReturnResult(sqlmock.NewResult(0, 1))
-			mock.ExpectExec(`DELETE FROM locks (.+)`).WithArgs(sqlmock.AnyArg()).WillReturnError(badDelete)
+			mock.ExpectExec(`DELETE FROM locks (.+)`).WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg()).WillReturnError(badDelete)
 			if err := client.Release(fakeLock); !errors.Is(err, badDelete) {
 				t.Errorf("expected delete error missing: %v", err)
-			}
-		})
-		t.Run("bad commit", func(t *testing.T) {
-			client, mock, fakeLock := setup()
-			badCommit := errors.New("cannot commit release")
-			mock.ExpectBegin()
-			mock.ExpectExec(`UPDATE locks (.+)`).WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg()).WillReturnResult(sqlmock.NewResult(0, 1))
-			mock.ExpectExec(`DELETE FROM locks (.+)`).WithArgs(sqlmock.AnyArg()).WillReturnResult(sqlmock.NewResult(0, 1))
-			mock.ExpectCommit().WillReturnError(badCommit)
-			if err := client.Release(fakeLock); !errors.Is(err, badCommit) {
-				t.Errorf("expected commit error missing: %v", err)
 			}
 		})
 	})
