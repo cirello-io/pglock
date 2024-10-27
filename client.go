@@ -223,39 +223,42 @@ func (c *Client) storeAcquire(ctx context.Context, l *Lock) error {
 		return typedError(err, "cannot run query to read record version number")
 	}
 
-	tx, err := c.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
-	if err != nil {
-		return typedError(err, "cannot create transaction for lock acquisition")
-	}
 	c.log.Debug("storeAcquire in: %v %v %v %v", l.name, rvn, l.data, l.recordVersionNumber)
 	defer func() {
 		c.log.Debug("storeAcquire out: %v %v %v %v", l.name, rvn, l.data, l.recordVersionNumber)
 	}()
-	_, err = tx.ExecContext(ctx, `
+	rowLockInfo := c.db.QueryRowContext(ctx, `
 		INSERT INTO `+c.tableName+`
 			("name", "record_version_number", "data", "owner")
 		VALUES
 			($1, $2, $3, $6)
 		ON CONFLICT ("name") DO UPDATE
 		SET
-			"record_version_number" = $2,
+			"record_version_number" = CASE
+				WHEN COALESCE(`+c.tableName+`."record_version_number" = $4, TRUE) THEN $2
+				ELSE `+c.tableName+`."record_version_number"
+			END,
 			"data" = CASE
-				WHEN $5 THEN $3
+				WHEN COALESCE(`+c.tableName+`."record_version_number" = $4, TRUE) THEN
+					CASE
+						WHEN $5 THEN $3
+						ELSE `+c.tableName+`."data"
+					END
 				ELSE `+c.tableName+`."data"
 			END,
-			"owner" = $6
-		WHERE
-			`+c.tableName+`."record_version_number" IS NULL
-			OR `+c.tableName+`."record_version_number" = $4
+			"owner" = CASE
+				WHEN COALESCE(`+c.tableName+`."record_version_number" = $4, TRUE) THEN $6
+				ELSE `+c.tableName+`."owner"
+			END
+		RETURNING
+			"record_version_number", "data", "owner"
 	`, l.name, rvn, l.data, l.recordVersionNumber, l.replaceData, c.owner)
-	if err != nil {
-		return typedError(err, "cannot run query to acquire lock")
-	}
-	rowLockInfo := tx.QueryRowContext(ctx, `SELECT "record_version_number", "data", "owner" FROM `+c.tableName+` WHERE name = $1 FOR UPDATE`, l.name)
-	var actualRVN int64
-	var data []byte
-	var actualOwner string
-	if err := rowLockInfo.Scan(&actualRVN, &data, &actualOwner); err != nil {
+	var (
+		actualRVN   int64
+		actualData  []byte
+		actualOwner string
+	)
+	if err := rowLockInfo.Scan(&actualRVN, &actualData, &actualOwner); err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return typedError(err, "cannot load information for lock acquisition")
 	}
 	l.owner = actualOwner
@@ -263,11 +266,8 @@ func (c *Client) storeAcquire(ctx context.Context, l *Lock) error {
 		l.recordVersionNumber = actualRVN
 		return ErrNotAcquired
 	}
-	if err := tx.Commit(); err != nil {
-		return typedError(err, "cannot commit lock acquisition")
-	}
 	l.recordVersionNumber = rvn
-	l.data = data
+	l.data = actualData
 	return nil
 }
 
