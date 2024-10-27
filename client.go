@@ -392,11 +392,7 @@ func (c *Client) storeHeartbeat(ctx context.Context, l *Lock) error {
 	if err != nil {
 		return typedError(err, "cannot run query to read record version number")
 	}
-	tx, err := c.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
-	if err != nil {
-		return typedError(err, "cannot create transaction for lock acquisition")
-	}
-	result, err := tx.ExecContext(ctx, `
+	result, err := c.db.ExecContext(ctx, `
 		UPDATE
 			`+c.tableName+`
 		SET
@@ -413,9 +409,6 @@ func (c *Client) storeHeartbeat(ctx context.Context, l *Lock) error {
 		return typedError(err, "cannot confirm whether the lock has been updated for the heartbeat")
 	} else if affected == 0 {
 		return ErrLockAlreadyReleased
-	}
-	if err := tx.Commit(); err != nil {
-		return typedError(err, "cannot commit lock heartbeat")
 	}
 	l.recordVersionNumber = rvn
 	return nil

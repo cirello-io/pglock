@@ -229,15 +229,6 @@ func TestDBErrorHandling(t *testing.T) {
 		})
 	})
 	t.Run("heartbeat", func(t *testing.T) {
-		t.Run("bad tx", func(t *testing.T) {
-			client, mock, fakeLock := setup()
-			badTx := errors.New("transaction begin error")
-			mock.ExpectQuery(`SELECT nextval\('locks_rvn'\)`).WillReturnRows(sqlmock.NewRows([]string{"nextval"}).AddRow(1))
-			mock.ExpectBegin().WillReturnError(badTx)
-			if err := client.SendHeartbeat(context.Background(), fakeLock); !errors.Is(err, badTx) {
-				t.Errorf("expected tx error missing: %v", err)
-			}
-		})
 		t.Run("bad rvn", func(t *testing.T) {
 			client, mock, fakeLock := setup()
 			badRVN := errors.New("cannot load next RVN")
@@ -246,11 +237,10 @@ func TestDBErrorHandling(t *testing.T) {
 				t.Errorf("expected RVN error missing: %v", err)
 			}
 		})
-		t.Run("bad insert", func(t *testing.T) {
+		t.Run("bad update", func(t *testing.T) {
 			client, mock, fakeLock := setup()
 			badUpdate := errors.New("cannot insert")
 			mock.ExpectQuery(`SELECT nextval\('locks_rvn'\)`).WillReturnRows(sqlmock.NewRows([]string{"nextval"}).AddRow(1))
-			mock.ExpectBegin()
 			mock.ExpectExec(`UPDATE locks (.+)`).WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg()).WillReturnError(badUpdate)
 			if err := client.SendHeartbeat(context.Background(), fakeLock); !errors.Is(err, badUpdate) {
 				t.Errorf("expected RVN error missing: %v", err)
@@ -260,21 +250,9 @@ func TestDBErrorHandling(t *testing.T) {
 			client, mock, fakeLock := setup()
 			badRVN := errors.New("cannot confirm RVN")
 			mock.ExpectQuery(`SELECT nextval\('locks_rvn'\)`).WillReturnRows(sqlmock.NewRows([]string{"nextval"}).AddRow(1))
-			mock.ExpectBegin()
 			mock.ExpectExec(`UPDATE locks (.+)`).WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg()).WillReturnResult(sqlmock.NewErrorResult(badRVN))
 			if err := client.SendHeartbeat(context.Background(), fakeLock); !errors.Is(err, badRVN) {
 				t.Errorf("expected RVN confirmation error missing: %v", err)
-			}
-		})
-		t.Run("bad commit", func(t *testing.T) {
-			client, mock, fakeLock := setup()
-			badCommit := errors.New("cannot confirm RVN")
-			mock.ExpectQuery(`SELECT nextval\('locks_rvn'\)`).WillReturnRows(sqlmock.NewRows([]string{"nextval"}).AddRow(1))
-			mock.ExpectBegin()
-			mock.ExpectExec(`UPDATE locks (.+)`).WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg()).WillReturnResult(sqlmock.NewResult(0, 1))
-			mock.ExpectCommit().WillReturnError(badCommit)
-			if err := client.SendHeartbeat(context.Background(), fakeLock); !errors.Is(err, badCommit) {
-				t.Errorf("expected commit error missing: %v", err)
 			}
 		})
 	})
