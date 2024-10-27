@@ -350,14 +350,14 @@ func TestKeepOnRelease(t *testing.T) {
 	expected := []byte("42")
 	l, err := c.Acquire(name, pglock.KeepOnRelease(), pglock.WithData(expected))
 	if err != nil {
-		t.Fatal("unexpected error while acquiring lock:", err)
+		t.Fatal("unexpected error while acquiring lock (take 1):", err)
 	}
 	t.Log("lock acquired")
 	l.Close()
 
 	l2, err := c.Acquire(name)
 	if err != nil {
-		t.Fatal("unexpected error while acquiring lock:", err)
+		t.Fatal("unexpected error while acquiring lock (take 2):", err)
 	}
 	defer l2.Close()
 	t.Log("lock reacquired")

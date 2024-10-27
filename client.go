@@ -223,39 +223,42 @@ func (c *Client) storeAcquire(ctx context.Context, l *Lock) error {
 		return typedError(err, "cannot run query to read record version number")
 	}
 
-	tx, err := c.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
-	if err != nil {
-		return typedError(err, "cannot create transaction for lock acquisition")
-	}
 	c.log.Debug("storeAcquire in: %v %v %v %v", l.name, rvn, l.data, l.recordVersionNumber)
 	defer func() {
 		c.log.Debug("storeAcquire out: %v %v %v %v", l.name, rvn, l.data, l.recordVersionNumber)
 	}()
-	_, err = tx.ExecContext(ctx, `
+	rowLockInfo := c.db.QueryRowContext(ctx, `
 		INSERT INTO `+c.tableName+`
 			("name", "record_version_number", "data", "owner")
 		VALUES
 			($1, $2, $3, $6)
 		ON CONFLICT ("name") DO UPDATE
 		SET
-			"record_version_number" = $2,
+			"record_version_number" = CASE
+				WHEN COALESCE(`+c.tableName+`."record_version_number" = $4, TRUE) THEN $2
+				ELSE `+c.tableName+`."record_version_number"
+			END,
 			"data" = CASE
-				WHEN $5 THEN $3
+				WHEN COALESCE(`+c.tableName+`."record_version_number" = $4, TRUE) THEN
+					CASE
+						WHEN $5 THEN $3
+						ELSE `+c.tableName+`."data"
+					END
 				ELSE `+c.tableName+`."data"
 			END,
-			"owner" = $6
-		WHERE
-			`+c.tableName+`."record_version_number" IS NULL
-			OR `+c.tableName+`."record_version_number" = $4
+			"owner" = CASE
+				WHEN COALESCE(`+c.tableName+`."record_version_number" = $4, TRUE) THEN $6
+				ELSE `+c.tableName+`."owner"
+			END
+		RETURNING
+			"record_version_number", "data", "owner"
 	`, l.name, rvn, l.data, l.recordVersionNumber, l.replaceData, c.owner)
-	if err != nil {
-		return typedError(err, "cannot run query to acquire lock")
-	}
-	rowLockInfo := tx.QueryRowContext(ctx, `SELECT "record_version_number", "data", "owner" FROM `+c.tableName+` WHERE name = $1 FOR UPDATE`, l.name)
-	var actualRVN int64
-	var data []byte
-	var actualOwner string
-	if err := rowLockInfo.Scan(&actualRVN, &data, &actualOwner); err != nil {
+	var (
+		actualRVN   int64
+		actualData  []byte
+		actualOwner string
+	)
+	if err := rowLockInfo.Scan(&actualRVN, &actualData, &actualOwner); err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return typedError(err, "cannot load information for lock acquisition")
 	}
 	l.owner = actualOwner
@@ -263,11 +266,8 @@ func (c *Client) storeAcquire(ctx context.Context, l *Lock) error {
 		l.recordVersionNumber = actualRVN
 		return ErrNotAcquired
 	}
-	if err := tx.Commit(); err != nil {
-		return typedError(err, "cannot commit lock acquisition")
-	}
 	l.recordVersionNumber = rvn
-	l.data = data
+	l.data = actualData
 	return nil
 }
 
@@ -312,21 +312,34 @@ func (c *Client) storeRelease(ctx context.Context, l *Lock) error {
 	defer l.mu.Unlock()
 	ctx, cancel := context.WithTimeout(ctx, l.leaseDuration)
 	defer cancel()
-	tx, err := c.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
-	if err != nil {
-		return typedError(err, "cannot create transaction for lock acquisition")
-	}
-	result, err := tx.ExecContext(ctx, `
-		UPDATE
-			`+c.tableName+`
-		SET
-			"record_version_number" = NULL
-		WHERE
-			"name" = $1
-			AND "record_version_number" = $2
-	`, l.name, l.recordVersionNumber)
-	if err != nil {
-		return typedError(err, "cannot run query to release lock")
+	var result sql.Result
+	switch l.keepOnRelease {
+	case true:
+		res, err := c.db.ExecContext(ctx, `
+			UPDATE
+				`+c.tableName+`
+			SET
+				"record_version_number" = NULL
+			WHERE
+				"name" = $1
+				AND "record_version_number" = $2
+		`, l.name, l.recordVersionNumber)
+		if err != nil {
+			return typedError(err, "cannot run query to release lock (keep)")
+		}
+		result = res
+	case false:
+		res, err := c.db.ExecContext(ctx, `
+			DELETE FROM
+				`+c.tableName+`
+			WHERE
+				"name" = $1
+				AND "record_version_number" = $2
+		`, l.name, l.recordVersionNumber)
+		if err != nil {
+			return typedError(err, "cannot run query to delete lock (delete)")
+		}
+		result = res
 	}
 	affected, err := result.RowsAffected()
 	if err != nil {
@@ -334,20 +347,6 @@ func (c *Client) storeRelease(ctx context.Context, l *Lock) error {
 	} else if affected == 0 {
 		l.isReleased = true
 		return ErrLockAlreadyReleased
-	}
-	if !l.keepOnRelease {
-		_, err := tx.ExecContext(ctx, `
-		DELETE FROM
-			`+c.tableName+`
-		WHERE
-			"name" = $1
-			AND "record_version_number" IS NULL`, l.name)
-		if err != nil {
-			return typedError(err, "cannot run query to delete lock")
-		}
-	}
-	if err := tx.Commit(); err != nil {
-		return typedError(err, "cannot commit lock release")
 	}
 	l.isReleased = true
 	l.heartbeatCancel()
@@ -392,11 +391,7 @@ func (c *Client) storeHeartbeat(ctx context.Context, l *Lock) error {
 	if err != nil {
 		return typedError(err, "cannot run query to read record version number")
 	}
-	tx, err := c.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
-	if err != nil {
-		return typedError(err, "cannot create transaction for lock acquisition")
-	}
-	result, err := tx.ExecContext(ctx, `
+	result, err := c.db.ExecContext(ctx, `
 		UPDATE
 			`+c.tableName+`
 		SET
@@ -413,9 +408,6 @@ func (c *Client) storeHeartbeat(ctx context.Context, l *Lock) error {
 		return typedError(err, "cannot confirm whether the lock has been updated for the heartbeat")
 	} else if affected == 0 {
 		return ErrLockAlreadyReleased
-	}
-	if err := tx.Commit(); err != nil {
-		return typedError(err, "cannot commit lock heartbeat")
 	}
 	l.recordVersionNumber = rvn
 	return nil
