@@ -1,11 +1,9 @@
 linters:
-	which golangci-lint || (go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.60.1 && echo installed linter)
-	golangci-lint run --disable-all \
+	go tool github.com/golangci/golangci-lint/cmd/golangci-lint run --disable-all \
 		-E "errcheck" \
 		-E "errname" \
 		-E "errorlint" \
 		-E "exhaustive" \
-		-E "exportloopref" \
 		-E "gci" \
 		-E "gocritic" \
 		-E "godot" \
