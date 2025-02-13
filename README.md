@@ -10,7 +10,7 @@ fine-grained and coarse-grained locking as the lock keys can be any arbitrary
 string, up to a certain length. Please create issues in the GitHub repository
 with questions, pull request are very much welcome.
 
-_Recommended PostgreSQL version: 12 or newer_
+_Recommended PostgreSQL version: 13 or newer_
 
 ## Use cases
 A common use case for this lock client is:
