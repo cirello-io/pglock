@@ -3,6 +3,7 @@
 [![GoDoc](https://godoc.org/cirello.io/pglock?status.svg)](https://godoc.org/cirello.io/pglock)
 [![Build status](https://github.com/cirello-io/pglock/actions/workflows/go.yml/badge.svg)](https://github.com/cirello-io/pglock/actions/workflows/go.yml)
 [![Mentioned in Awesome Go](https://awesome.re/mentioned-badge.svg)](https://github.com/avelino/awesome-go)
+[![libs.tech recommends](https://libs.tech/project/162168429/badge.svg)](https://libs.tech/project/162168429/pglock)
 
 The PostgreSQL Lock Client for Go is a general purpose distributed locking
 library built for PostgreSQL. The PostgreSQL Lock Client for Go supports both
