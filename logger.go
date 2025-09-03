@@ -20,7 +20,7 @@ import "fmt"
 
 // Logger is used for internal inspection of the lock client.
 type Logger interface {
-	Println(v ...interface{})
+	Println(v ...any)
 }
 
 // LevelLogger is used for internal inspection of the lock client.

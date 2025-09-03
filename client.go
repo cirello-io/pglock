@@ -480,7 +480,7 @@ const maxRetries = 1024
 
 func (c *Client) retry(f func() error) error {
 	var err error
-	for i := 0; i < maxRetries; i++ {
+	for range maxRetries {
 		err = f()
 		if failedPrecondition := (&FailedPreconditionError{}); err == nil || !errors.As(err, &failedPrecondition) {
 			break

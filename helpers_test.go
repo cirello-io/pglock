@@ -32,7 +32,7 @@ func init() {
 func randStr() string {
 	const length = 32
 	var b bytes.Buffer
-	for i := 0; i < length; i++ {
+	for range length {
 		b.WriteByte(chars[rand.Intn(len(chars))])
 	}
 	return b.String()
@@ -42,14 +42,14 @@ type testLogger struct {
 	t testing.TB
 }
 
-func (t *testLogger) Println(v ...interface{}) {
+func (t *testLogger) Println(v ...any) {
 	t.t.Helper()
 	t.t.Log(v...)
 }
 
 type discardLogging struct{}
 
-func (t *discardLogging) Println(...interface{}) {}
+func (t *discardLogging) Println(...any) {}
 
 type testLevelLogger struct {
 	t testing.TB

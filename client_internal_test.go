@@ -96,7 +96,7 @@ type testLogger struct {
 	t *testing.T
 }
 
-func (t *testLogger) Println(v ...interface{}) {
+func (t *testLogger) Println(v ...any) {
 	t.t.Log(v...)
 }
 
@@ -303,6 +303,6 @@ type testBufferLogger struct {
 	buf bytes.Buffer
 }
 
-func (t *testBufferLogger) Println(v ...interface{}) {
+func (t *testBufferLogger) Println(v ...any) {
 	fmt.Fprintln(&t.buf, v...)
 }
