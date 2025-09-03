@@ -1,5 +1,5 @@
 linters:
-	GOTOOLCHAIN=go1.24.0 go run -mod=readonly github.com/golangci/golangci-lint/cmd/golangci-lint@latest run --disable-all \
+	go run -mod=readonly github.com/golangci/golangci-lint/cmd/golangci-lint@latest run --disable-all \
 		-E "errcheck" \
 		-E "errname" \
 		-E "errorlint" \
