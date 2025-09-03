@@ -218,7 +218,7 @@ func (c *Client) storeAcquire(ctx context.Context, l *Lock) error {
 	ctx, cancel := context.WithTimeout(ctx, l.leaseDuration)
 	defer cancel()
 
-	rvn, err := c.getNextRVN(ctx, c.db)
+	rvn, err := c.getNextRVN(ctx)
 	if err != nil {
 		return typedError(err, "cannot run query to read record version number")
 	}
@@ -387,7 +387,7 @@ func (c *Client) SendHeartbeat(ctx context.Context, l *Lock) error {
 func (c *Client) storeHeartbeat(ctx context.Context, l *Lock) error {
 	ctx, cancel := context.WithTimeout(ctx, l.leaseDuration)
 	defer cancel()
-	rvn, err := c.getNextRVN(ctx, c.db)
+	rvn, err := c.getNextRVN(ctx)
 	if err != nil {
 		return typedError(err, "cannot run query to read record version number")
 	}
@@ -469,8 +469,8 @@ func (c *Client) getLock(ctx context.Context, name string) (*Lock, error) {
 	return l, typedError(err, "cannot load the data of this lock")
 }
 
-func (c *Client) getNextRVN(ctx context.Context, db *sql.DB) (int64, error) {
-	rowRVN := db.QueryRowContext(ctx, `SELECT nextval('`+c.tableName+`_rvn')`)
+func (c *Client) getNextRVN(ctx context.Context) (int64, error) {
+	rowRVN := c.db.QueryRowContext(ctx, `SELECT nextval($1)`, c.tableName+`_rvn`)
 	var rvn int64
 	err := rowRVN.Scan(&rvn)
 	return rvn, err
@@ -480,7 +480,7 @@ const maxRetries = 1024
 
 func (c *Client) retry(f func() error) error {
 	var err error
-	for i := 0; i < maxRetries; i++ {
+	for range maxRetries {
 		err = f()
 		if failedPrecondition := (&FailedPreconditionError{}); err == nil || !errors.As(err, &failedPrecondition) {
 			break

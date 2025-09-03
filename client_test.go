@@ -773,7 +773,7 @@ func TestDo(t *testing.T) {
 			t.Fatal("cannot create lock client:", err)
 		}
 		err = c.Do(context.Background(), name, func(context.Context, *pglock.Lock) error {
-			for i := 0; i < 5; i++ {
+			for i := range 5 {
 				t.Log("i = ", i)
 				time.Sleep(1 * time.Second)
 			}
@@ -862,7 +862,7 @@ func TestDo(t *testing.T) {
 			t.Fatal("cannot grab lock:", err)
 		}
 		err = c.Do(context.Background(), name, func(context.Context, *pglock.Lock) error {
-			for i := 0; i < 5; i++ {
+			for i := range 5 {
 				t.Log("i = ", i)
 				time.Sleep(1 * time.Second)
 			}
@@ -1072,7 +1072,7 @@ func TestIssue29(t *testing.T) {
 		)
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		for i := 0; i < 1024; i++ {
+		for range 1024 {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
@@ -1119,7 +1119,7 @@ func parallelAcquire(tb testing.TB, maxConcurrency int) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	errCh := make(chan error, maxConcurrency)
-	for i := 0; i < maxConcurrency; i++ {
+	for range maxConcurrency {
 		go func() {
 			c, err := pglock.New(
 				db,
@@ -1216,7 +1216,7 @@ func TestGetAllLocks(t *testing.T) {
 	defer func() { _ = c.DropTable() }()
 	names := make(map[string]struct{})
 	expected := []byte("42")
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		name := randStr()
 		if _, err := c.Acquire(name, pglock.WithData(expected)); err != nil {
 			t.Fatal("unexpected error while acquiring lock:", err)
@@ -1264,7 +1264,7 @@ func TestStaleAfterRelease(t *testing.T) {
 		group errgroup.Group
 		start = make(chan struct{})
 	)
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		lockName := fmt.Sprint("lock-name-", i)
 		group.Go(func() error {
 			<-start
@@ -1314,7 +1314,7 @@ func TestOverflowSequence(t *testing.T) {
 	if _, err := db.Exec(alterSequence); err != nil {
 		t.Fatal("cannot reset sequence:", err)
 	}
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		l1, err := c.Acquire(name)
 		if err != nil {
 			t.Fatal("unexpected error while acquiring lock:", err)

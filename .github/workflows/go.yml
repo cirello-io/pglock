@@ -11,7 +11,6 @@ jobs:
     strategy:
       matrix:
         postgres-version: ['latest', 16, 15, 14, 13]
-        go-version: ['stable','oldstable']
     runs-on: ubuntu-latest
 
     services:
@@ -31,13 +30,13 @@ jobs:
     - name: Setup Go
       uses: actions/setup-go@v5
       with:
-        go-version: ${{ matrix.go-version }}
+        go-version-file: "go.mod"
 
     - name: golangci-lint cache
       uses: actions/cache@v4
       with:
         path: ~/go/bin/golangci-lint
-        key: ${{ runner.os }}-${{ matrix.go-version }}-golangci-lint-v1.60.1
+        key: ${{ runner.os }}-golangci-lint-v2.4.0
 
     - name: Test
       run: |
@@ -46,5 +45,5 @@ jobs:
     - name: Upload coverage
       uses: actions/upload-artifact@v4
       with:
-        name: coverage_${{ matrix.go-version }}_${{ matrix.postgres-version }}
+        name: coverage_${{ matrix.postgres-version }}
         path: coverage.html
