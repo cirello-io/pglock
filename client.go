@@ -470,7 +470,7 @@ func (c *Client) getLock(ctx context.Context, name string) (*Lock, error) {
 }
 
 func (c *Client) getNextRVN(ctx context.Context) (int64, error) {
-	rowRVN := c.db.QueryRowContext(ctx, `SELECT nextval('`+c.tableName+`_rvn')`)
+	rowRVN := c.db.QueryRowContext(ctx, `SELECT nextval($1)`, c.tableName+`_rvn`)
 	var rvn int64
 	err := rowRVN.Scan(&rvn)
 	return rvn, err
