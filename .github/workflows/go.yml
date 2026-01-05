@@ -25,15 +25,15 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
 
     - name: Setup Go
-      uses: actions/setup-go@v5
+      uses: actions/setup-go@v6
       with:
         go-version-file: "go.mod"
 
     - name: golangci-lint cache
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       with:
         path: ~/go/bin/golangci-lint
         key: ${{ runner.os }}-golangci-lint-v2.4.0
