@@ -3,7 +3,7 @@ module cirello.io/pglock
 require (
 	github.com/DATA-DOG/go-sqlmock v1.5.2
 	github.com/jackc/pgx/v5 v5.8.0
-	github.com/lib/pq v1.11.1
+	github.com/lib/pq v1.11.2
 	golang.org/x/sync v0.19.0
 )
 
