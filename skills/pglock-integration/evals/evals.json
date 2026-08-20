@@ -1,0 +1,49 @@
+{
+  "skill_name": "pglock-integration",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Add distributed per-customer locking to my Go worker using cirello.io/pglock. It uses database/sql and lib/pq, should initialize the lock schema safely, wait for a customer lock, run the job, and release it.",
+      "expected_output": "Application code that constructs a verified PostgreSQL client, performs idempotent schema setup in an appropriate startup or migration step, uses a stable customer-scoped key and context-aware acquisition, and reliably releases the lock.",
+      "assertions": [
+        "The solution uses pglock.New with the lib/pq driver imported and checks setup errors.",
+        "The solution uses TryCreateTable or an equivalent controlled migration and does not drop the shared table at startup.",
+        "The lock key is stable across worker instances and the code releases the acquired lock even when the job returns an error.",
+        "The solution uses a context-aware acquisition for bounded application work."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Our Go service uses github.com/jackc/pgx/v5/stdlib and sql.Open(\"pgx\", ...). Integrate cirello.io/pglock without changing the database driver, and explain why the constructor choice matters.",
+      "expected_output": "The integration uses pglock.UnsafeNew only after verifying the pgx PostgreSQL driver, checks connectivity and constructor errors, and explains that pglock.New's driver assertion only recognizes lib/pq.",
+      "assertions": [
+        "The solution selects UnsafeNew for the pgx stdlib connection instead of pretending it is a lib/pq connection.",
+        "The solution retains normal database PingContext and error handling.",
+        "The explanation distinguishes bypassing pglock's type check from bypassing PostgreSQL validation."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Build a leader-election loop with pglock for a Go service. Leadership may last minutes, the process must stop work if it loses the lease, and another instance should take over after failure.",
+      "expected_output": "A Do-based or equivalent context-aware loop with a lease/heartbeat configuration that satisfies the package constraint, callback cancellation handling, prompt release, stable leader key, and PostgreSQL-primary deployment guidance.",
+      "assertions": [
+        "The design uses Do or passes the lock callback context through all long-running work.",
+        "The callback exits on ctx.Done and does not continue protected side effects after lease loss.",
+        "The lease is no shorter than twice the heartbeat and the recommendation to use a substantially larger ratio is followed.",
+        "All instances use the same stable key, table, and PostgreSQL primary."
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Add integration tests for a pglock-protected job. Test immediate contention, context timeout, retained lock data, and the error handling for a missing inspection row.",
+      "expected_output": "Real-PostgreSQL tests that isolate their table/database, exercise FailIfLocked and AcquireContext, verify KeepOnRelease/ReplaceData behavior, and classify ErrLockNotFound with errors.Is/errors.As.",
+      "assertions": [
+        "Contention is tested with two clients sharing the same key and FailIfLocked returns ErrNotAcquired.",
+        "A canceled or timed-out AcquireContext does not execute the protected callback.",
+        "Retained data and explicit replacement are tested with KeepOnRelease, WithData, and ReplaceData.",
+        "Missing lock inspection uses errors.Is or errors.As rather than matching only the error string.",
+        "The tests use PostgreSQL for lock semantics instead of treating SQLite or an in-memory mock as sufficient."
+      ]
+    }
+  ]
+}

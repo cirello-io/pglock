@@ -1,0 +1,87 @@
+{
+  "skill_name": "pglock-integration",
+  "train": [
+    {
+      "query": "Add a pglock mutex around each customer's background job in my Go service.",
+      "should_trigger": true
+    },
+    {
+      "query": "My Go leader election should use cirello.io/pglock and stop when the lease is lost.",
+      "should_trigger": true
+    },
+    {
+      "query": "We use pgx stdlib. How do I construct a pglock client without changing drivers?",
+      "should_trigger": true
+    },
+    {
+      "query": "Add a PostgreSQL integration test for FailIfLocked and AcquireContext in my application.",
+      "should_trigger": true
+    },
+    {
+      "query": "How should I retain and replace BYTEA metadata on a pglock row between owners?",
+      "should_trigger": true
+    },
+    {
+      "query": "Fix a race inside pglock's heartbeat implementation and update its upstream tests.",
+      "should_trigger": false
+    },
+    {
+      "query": "Review the SQL template implementation in the pglock repository.",
+      "should_trigger": false
+    },
+    {
+      "query": "Tune PostgreSQL autovacuum for our analytics cluster.",
+      "should_trigger": false
+    },
+    {
+      "query": "Build a generic Go REST API backed by PostgreSQL, with no distributed locking.",
+      "should_trigger": false
+    },
+    {
+      "query": "Explain Redis Redlock for a Node.js application.",
+      "should_trigger": false
+    }
+  ],
+  "validation": [
+    {
+      "query": "Use pglock in a Go worker, provision its shared table, and make a canceled job release safely.",
+      "should_trigger": true
+    },
+    {
+      "query": "Our service needs a non-blocking pglock attempt and an owner value visible to operators.",
+      "should_trigger": true
+    },
+    {
+      "query": "Show how to test a pglock lease heartbeat against real PostgreSQL.",
+      "should_trigger": true
+    },
+    {
+      "query": "A pglock user sees ErrNotAcquired and ErrLockNotFound; classify them in application code.",
+      "should_trigger": true
+    },
+    {
+      "query": "Use a trusted custom pglock table name shared by all service instances.",
+      "should_trigger": true
+    },
+    {
+      "query": "Implement a new pglock option in client.go and add unit tests to this repository.",
+      "should_trigger": false
+    },
+    {
+      "query": "Change the pglock package's schema.sql and make its schema test pass.",
+      "should_trigger": false
+    },
+    {
+      "query": "Write a Python Celery task using a Redis lock.",
+      "should_trigger": false
+    },
+    {
+      "query": "Configure PostgreSQL replication failover for a database administrator.",
+      "should_trigger": false
+    },
+    {
+      "query": "Refactor an unrelated Go parser and improve its unit test coverage.",
+      "should_trigger": false
+    }
+  ]
+}
