@@ -1322,3 +1322,149 @@ func TestOverflowSequence(t *testing.T) {
 		l1.Close()
 	}
 }
+
+func TestPollInterval(t *testing.T) {
+	t.Parallel()
+	const (
+		leaseDuration      = 1 * time.Second
+		heartbeatFrequency = 250 * time.Millisecond
+		pollInterval       = 50 * time.Millisecond
+	)
+	t.Run("released lock", func(t *testing.T) {
+		t.Parallel()
+		db, tableName := setupDB(t)
+		defer db.Close()
+		name := randStr()
+		holder, err := pglock.New(
+			db,
+			pglock.WithLevelLogger(&testLevelLogger{t}),
+			pglock.WithLeaseDuration(leaseDuration),
+			pglock.WithHeartbeatFrequency(heartbeatFrequency),
+			pglock.WithCustomTable(tableName),
+		)
+		if err != nil {
+			t.Fatal("cannot create lock client:", err)
+		}
+		waiter, err := pglock.New(
+			db,
+			pglock.WithLevelLogger(&testLevelLogger{t}),
+			pglock.WithLeaseDuration(leaseDuration),
+			pglock.WithHeartbeatFrequency(heartbeatFrequency),
+			pglock.WithCustomTable(tableName),
+		)
+		if err != nil {
+			t.Fatal("cannot create lock client:", err)
+		}
+		l1, err := holder.Acquire(name)
+		if err != nil {
+			t.Fatal("unexpected error while acquiring 1st lock:", err)
+		}
+		acquired := make(chan time.Time, 1)
+		go func() {
+			l2, err := waiter.Acquire(name, pglock.WithPollInterval(pollInterval))
+			if err != nil {
+				t.Error("unexpected error while acquiring 2nd lock:", err)
+				close(acquired)
+				return
+			}
+			acquired <- time.Now()
+			l2.Close()
+		}()
+		// Released between two lease-spaced attempts, so that only polling
+		// picks it up quickly.
+		time.Sleep(leaseDuration / 4)
+		releasedAt := time.Now()
+		if err := l1.Close(); err != nil {
+			t.Fatal("cannot release 1st lock:", err)
+		}
+		acquiredAt, ok := <-acquired
+		if !ok {
+			return
+		}
+		if waited := acquiredAt.Sub(releasedAt); waited >= leaseDuration/4 {
+			t.Fatal("released lock picked up too late:", waited)
+		}
+	})
+	t.Run("live holder", func(t *testing.T) {
+		t.Parallel()
+		db, tableName := setupDB(t)
+		defer db.Close()
+		name := randStr()
+		holder, err := pglock.New(
+			db,
+			pglock.WithLevelLogger(&testLevelLogger{t}),
+			pglock.WithLeaseDuration(leaseDuration),
+			pglock.WithHeartbeatFrequency(heartbeatFrequency),
+			pglock.WithCustomTable(tableName),
+		)
+		if err != nil {
+			t.Fatal("cannot create lock client:", err)
+		}
+		waiter, err := pglock.New(
+			db,
+			pglock.WithLevelLogger(&testLevelLogger{t}),
+			pglock.WithLeaseDuration(leaseDuration),
+			pglock.WithHeartbeatFrequency(heartbeatFrequency),
+			pglock.WithCustomTable(tableName),
+		)
+		if err != nil {
+			t.Fatal("cannot create lock client:", err)
+		}
+		l1, err := holder.Acquire(name)
+		if err != nil {
+			t.Fatal("unexpected error while acquiring 1st lock:", err)
+		}
+		defer l1.Close()
+		ctx, cancel := context.WithTimeout(context.Background(), 3*leaseDuration)
+		defer cancel()
+		// The deadline can also expire during an attempt, which then reports
+		// it as is.
+		_, err = waiter.AcquireContext(ctx, name, pglock.WithPollInterval(pollInterval))
+		if !errors.Is(err, pglock.ErrNotAcquired) && !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatal("lock taken from a live holder:", err)
+		}
+		if err := holder.SendHeartbeat(context.Background(), l1); err != nil {
+			t.Fatal("holder lost the lock:", err)
+		}
+	})
+	t.Run("dead holder", func(t *testing.T) {
+		t.Parallel()
+		db, tableName := setupDB(t)
+		defer db.Close()
+		name := randStr()
+		// Without heartbeats, the record version number never changes, as if
+		// the holder had died.
+		holder, err := pglock.New(
+			db,
+			pglock.WithLevelLogger(&testLevelLogger{t}),
+			pglock.WithLeaseDuration(leaseDuration),
+			pglock.WithHeartbeatFrequency(0),
+			pglock.WithCustomTable(tableName),
+		)
+		if err != nil {
+			t.Fatal("cannot create lock client:", err)
+		}
+		waiter, err := pglock.New(
+			db,
+			pglock.WithLevelLogger(&testLevelLogger{t}),
+			pglock.WithLeaseDuration(leaseDuration),
+			pglock.WithHeartbeatFrequency(heartbeatFrequency),
+			pglock.WithCustomTable(tableName),
+		)
+		if err != nil {
+			t.Fatal("cannot create lock client:", err)
+		}
+		if _, err := holder.Acquire(name); err != nil {
+			t.Fatal("unexpected error while acquiring 1st lock:", err)
+		}
+		start := time.Now()
+		l2, err := waiter.Acquire(name, pglock.WithPollInterval(pollInterval))
+		if err != nil {
+			t.Fatal("unexpected error while acquiring 2nd lock:", err)
+		}
+		defer l2.Close()
+		if waited := time.Since(start); waited < leaseDuration || waited >= 2*leaseDuration {
+			t.Fatal("lock of a dead holder taken over after", waited, "rather than about one lease")
+		}
+	})
+}

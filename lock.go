@@ -36,6 +36,7 @@ type Lock struct {
 	data          []byte
 	failIfLocked  bool
 	keepOnRelease bool
+	pollInterval  time.Duration
 
 	mu                  sync.Mutex
 	isReleased          bool
@@ -93,6 +94,14 @@ func WithCustomHeartbeatContext(ctx context.Context) LockOption {
 func FailIfLocked() LockOption {
 	return func(l *Lock) {
 		l.failIfLocked = true
+	}
+}
+
+// WithPollInterval checks a taken lock every d instead of once per lease
+// duration. A lock whose holder died is still only taken over after a lease.
+func WithPollInterval(d time.Duration) LockOption {
+	return func(l *Lock) {
+		l.pollInterval = d
 	}
 }
 

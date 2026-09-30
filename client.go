@@ -178,9 +178,22 @@ func (c *Client) Acquire(name string, opts ...LockOption) (*Lock, error) {
 // is canceled before the lock is acquired.
 func (c *Client) AcquireContext(ctx context.Context, name string, opts ...LockOption) (*Lock, error) {
 	l := c.newLock(ctx, name, opts)
+	// With a poll interval, the record version number is only presented, taking
+	// over the lock, once it has been seen unchanged for a whole lease. Until
+	// then -1 is presented, so that only a free lock is acquired.
+	var (
+		observedRecordVersionNumber int64
+		observedAt                  time.Time
+	)
 	for {
 		if err := ctx.Err(); err != nil {
 			return nil, ErrNotAcquired
+		}
+		if l.pollInterval > 0 {
+			l.recordVersionNumber = -1
+			if observedRecordVersionNumber != 0 && time.Since(observedAt) >= l.leaseDuration {
+				l.recordVersionNumber = observedRecordVersionNumber
+			}
 		}
 		err := c.retry(func() error { return c.tryAcquire(ctx, l) })
 		switch {
@@ -188,8 +201,15 @@ func (c *Client) AcquireContext(ctx context.Context, name string, opts ...LockOp
 			c.log.Debug("not acquired, exit")
 			return l, err
 		case errors.Is(err, ErrNotAcquired):
-			c.log.Debug("not acquired, wait: %v", l.leaseDuration)
-			waitFor(ctx, l.leaseDuration)
+			wait := l.leaseDuration
+			if l.pollInterval > 0 {
+				if l.recordVersionNumber != observedRecordVersionNumber {
+					observedRecordVersionNumber, observedAt = l.recordVersionNumber, time.Now()
+				}
+				wait = l.pollInterval
+			}
+			c.log.Debug("not acquired, wait: %v", wait)
+			waitFor(ctx, wait)
 			continue
 		case err != nil:
 			c.log.Error("error: %v", err)
