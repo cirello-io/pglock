@@ -42,6 +42,11 @@ type Lock struct {
 	recordVersionNumber int64
 }
 
+type rvnTrackedLock struct {
+	Lock
+	recordVersionNumberSince time.Time
+}
+
 // Data returns the content of the lock, if any is available.
 func (l *Lock) Data() []byte {
 	return l.data

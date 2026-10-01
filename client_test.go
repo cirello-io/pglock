@@ -342,6 +342,7 @@ func TestKeepOnRelease(t *testing.T) {
 		pglock.WithLogger(&testLogger{t}),
 		pglock.WithLeaseDuration(5*time.Second),
 		pglock.WithHeartbeatFrequency(1*time.Second),
+		pglock.WithPollFrequency(25*time.Millisecond),
 		pglock.WithCustomTable(tableName),
 	)
 	if err != nil {
@@ -437,6 +438,78 @@ func TestAcquire(t *testing.T) {
 	}
 	if !locked {
 		t.Fatal("concurrent lock flow is not working")
+	}
+
+	for _, tc := range []struct {
+		name          string
+		beatEvery     time.Duration
+		release       bool
+		shouldAcquire bool
+	}{
+		{"polling after release", 100 * time.Millisecond, true, true},
+		{"polling with heartbeats", 100 * time.Millisecond, false, false},
+		{"polling without heartbeats", 0, false, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			const lease = time.Second
+			client, err := pglock.New(db,
+				pglock.WithCustomTable(tableName),
+				pglock.WithLeaseDuration(lease),
+				pglock.WithHeartbeatFrequency(tc.beatEvery),
+				pglock.WithPollFrequency(25*time.Millisecond),
+			)
+			if err != nil {
+				t.Fatal("cannot create lock client:", err)
+			}
+			key := randStr()
+			held, err := client.Acquire(key)
+			if err != nil {
+				t.Fatal("cannot acquire initial lock:", err)
+			}
+			defer held.Close()
+			ctx, cancel := context.WithTimeout(context.Background(), 2*lease)
+			defer cancel()
+			released := make(chan error, 1)
+			if tc.release {
+				go func() {
+					select {
+					case <-time.After(lease / 4):
+						released <- held.Close()
+					case <-ctx.Done():
+						released <- ctx.Err()
+					}
+				}()
+			}
+			started := time.Now()
+			next, err := client.AcquireContext(ctx, key)
+			elapsed := time.Since(started)
+			if tc.release {
+				if err := <-released; err != nil {
+					t.Fatal("cannot release initial lock:", err)
+				}
+			}
+			if next != nil && err == nil {
+				defer next.Close()
+			}
+			if !tc.shouldAcquire {
+				if !errors.Is(err, pglock.ErrNotAcquired) && !errors.Is(err, context.DeadlineExceeded) {
+					t.Fatal("heartbeating lock should not be acquired:", err)
+				}
+				if err := client.SendHeartbeat(context.Background(), held); err != nil {
+					t.Fatal("initial holder lost the lock:", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal("cannot acquire waiting lock:", err)
+			}
+			if tc.release && elapsed >= 3*lease/4 {
+				t.Fatal("released lock was not acquired promptly:", elapsed)
+			}
+			if !tc.release && elapsed < lease {
+				t.Fatal("lock was taken over before a full lease:", elapsed)
+			}
+		})
 	}
 }
 
