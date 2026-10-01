@@ -55,6 +55,7 @@ type Client struct {
 	tableName          string
 	leaseDuration      time.Duration
 	heartbeatFrequency time.Duration
+	pollFrequency      time.Duration
 	log                LevelLogger
 	owner              string
 }
@@ -91,6 +92,9 @@ func newClient(db *sql.DB, opts ...ClientOption) (*Client, error) {
 	for _, opt := range opts {
 		opt(c)
 	}
+	if c.pollFrequency <= 0 || c.pollFrequency > c.leaseDuration {
+		c.pollFrequency = c.leaseDuration
+	}
 	if isDurationTooSmall(c) {
 		db.Close()
 		return nil, ErrDurationTooSmall
@@ -102,17 +106,19 @@ func isDurationTooSmall(c *Client) bool {
 	return c.heartbeatFrequency > 0 && c.leaseDuration < 2*c.heartbeatFrequency
 }
 
-func (c *Client) newLock(ctx context.Context, name string, opts []LockOption) *Lock {
+func (c *Client) newLock(ctx context.Context, name string, opts []LockOption) *rvnTrackedLock {
 	heartbeatContext, heartbeatCancel := context.WithCancel(ctx)
-	l := &Lock{
-		client:           c,
-		name:             name,
-		leaseDuration:    c.leaseDuration,
-		heartbeatContext: heartbeatContext,
-		heartbeatCancel:  heartbeatCancel,
+	l := &rvnTrackedLock{
+		Lock: Lock{
+			client:           c,
+			name:             name,
+			leaseDuration:    c.leaseDuration,
+			heartbeatContext: heartbeatContext,
+			heartbeatCancel:  heartbeatCancel,
+		},
 	}
 	for _, opt := range opts {
-		opt(l)
+		opt(&l.Lock)
 	}
 	return l
 }
@@ -186,20 +192,20 @@ func (c *Client) AcquireContext(ctx context.Context, name string, opts ...LockOp
 		switch {
 		case l.failIfLocked && errors.Is(err, ErrNotAcquired):
 			c.log.Debug("not acquired, exit")
-			return l, err
+			return &l.Lock, err
 		case errors.Is(err, ErrNotAcquired):
-			c.log.Debug("not acquired, wait: %v", l.leaseDuration)
-			waitFor(ctx, l.leaseDuration)
+			c.log.Debug("not acquired, wait: %v", c.pollFrequency)
+			waitFor(ctx, c.pollFrequency)
 			continue
 		case err != nil:
 			c.log.Error("error: %v", err)
 			return nil, err
 		}
-		return l, nil
+		return &l.Lock, nil
 	}
 }
 
-func (c *Client) tryAcquire(ctx context.Context, l *Lock) error {
+func (c *Client) tryAcquire(ctx context.Context, l *rvnTrackedLock) error {
 	err := c.storeAcquire(ctx, l)
 	if err != nil {
 		return err
@@ -208,25 +214,29 @@ func (c *Client) tryAcquire(ctx context.Context, l *Lock) error {
 		l.heartbeatWG.Add(1)
 		go func() {
 			defer l.heartbeatCancel()
-			c.heartbeat(l.heartbeatContext, l)
+			c.heartbeat(l.heartbeatContext, &l.Lock)
 		}()
 	}
 	return nil
 }
 
-func (c *Client) storeAcquire(ctx context.Context, l *Lock) error {
+func (c *Client) storeAcquire(ctx context.Context, l *rvnTrackedLock) error {
 	ctx, cancel := context.WithTimeout(ctx, l.leaseDuration)
 	defer cancel()
 
-	rvn, err := c.getNextRVN(ctx)
+	nextRVN, err := c.getNextRVN(ctx)
 	if err != nil {
 		return typedError(err, "cannot run query to read record version number")
 	}
 
-	c.log.Debug("storeAcquire in: %v %v %v %v", l.name, rvn, l.data, l.recordVersionNumber)
+	c.log.Debug("storeAcquire in: %v %v %v %v", l.name, nextRVN, l.data, l.recordVersionNumber)
 	defer func() {
-		c.log.Debug("storeAcquire out: %v %v %v %v", l.name, rvn, l.data, l.recordVersionNumber)
+		c.log.Debug("storeAcquire out: %v %v %v %v", l.name, nextRVN, l.data, l.recordVersionNumber)
 	}()
+	expectedRVN := sql.NullInt64{
+		Int64: l.recordVersionNumber,
+		Valid: !l.recordVersionNumberSince.IsZero() && time.Since(l.recordVersionNumberSince) >= l.leaseDuration,
+	}
 	rowLockInfo := c.db.QueryRowContext(ctx, `
 		INSERT INTO `+c.tableName+`
 			("name", "record_version_number", "data", "owner")
@@ -235,11 +245,11 @@ func (c *Client) storeAcquire(ctx context.Context, l *Lock) error {
 		ON CONFLICT ("name") DO UPDATE
 		SET
 			"record_version_number" = CASE
-				WHEN COALESCE(`+c.tableName+`."record_version_number" = $4, TRUE) THEN $2
+				WHEN `+c.tableName+`."record_version_number" IS NULL OR `+c.tableName+`."record_version_number" = $4 THEN $2
 				ELSE `+c.tableName+`."record_version_number"
 			END,
 			"data" = CASE
-				WHEN COALESCE(`+c.tableName+`."record_version_number" = $4, TRUE) THEN
+				WHEN `+c.tableName+`."record_version_number" IS NULL OR `+c.tableName+`."record_version_number" = $4 THEN
 					CASE
 						WHEN $5 THEN $3
 						ELSE `+c.tableName+`."data"
@@ -247,12 +257,12 @@ func (c *Client) storeAcquire(ctx context.Context, l *Lock) error {
 				ELSE `+c.tableName+`."data"
 			END,
 			"owner" = CASE
-				WHEN COALESCE(`+c.tableName+`."record_version_number" = $4, TRUE) THEN $6
+				WHEN `+c.tableName+`."record_version_number" IS NULL OR `+c.tableName+`."record_version_number" = $4 THEN $6
 				ELSE `+c.tableName+`."owner"
 			END
 		RETURNING
 			"record_version_number", "data", "owner"
-	`, l.name, rvn, l.data, l.recordVersionNumber, l.replaceData, c.owner)
+	`, l.name, nextRVN, l.data, expectedRVN, l.replaceData, c.owner)
 	var (
 		actualRVN   int64
 		actualData  []byte
@@ -262,13 +272,16 @@ func (c *Client) storeAcquire(ctx context.Context, l *Lock) error {
 		return typedError(err, "cannot load information for lock acquisition")
 	}
 	l.owner = actualOwner
-	if actualRVN != rvn {
-		l.recordVersionNumber = actualRVN
-		return ErrNotAcquired
+	if acquiredLock := actualRVN == nextRVN; acquiredLock {
+		l.recordVersionNumber = nextRVN
+		l.data = actualData
+		return nil
 	}
-	l.recordVersionNumber = rvn
-	l.data = actualData
-	return nil
+	if hasLockRatcheted := actualRVN != l.recordVersionNumber; hasLockRatcheted {
+		l.recordVersionNumberSince = time.Now()
+	}
+	l.recordVersionNumber = actualRVN
+	return ErrNotAcquired
 }
 
 // Do executes f while holding the lock for the named lock. When the lock loss
@@ -464,9 +477,9 @@ func (c *Client) getLock(ctx context.Context, name string) (*Lock, error) {
 	l.recordVersionNumber = -1
 	err := row.Scan(&l.name, &l.owner, &l.data)
 	if err == sql.ErrNoRows {
-		return l, ErrLockNotFound
+		return &l.Lock, ErrLockNotFound
 	}
-	return l, typedError(err, "cannot load the data of this lock")
+	return &l.Lock, typedError(err, "cannot load the data of this lock")
 }
 
 func (c *Client) getNextRVN(ctx context.Context) (int64, error) {
@@ -556,6 +569,14 @@ func WithLeaseDuration(d time.Duration) ClientOption {
 // should have no more than half of the duration of the lease.
 func WithHeartbeatFrequency(d time.Duration) ClientOption {
 	return func(c *Client) { c.heartbeatFrequency = d }
+}
+
+// WithPollFrequency defines the frequency of lock acquisition attempts.
+// Non-positive values or values exceeding the lease duration use the lease
+// duration. Takeover still requires an unchanged record version number for a
+// full lease duration.
+func WithPollFrequency(d time.Duration) ClientOption {
+	return func(c *Client) { c.pollFrequency = d }
 }
 
 // WithCustomTable reconfigures the lock client to use an alternate lock table
