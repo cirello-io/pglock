@@ -45,6 +45,7 @@ package. Here is some example code to get you started:
 package main
 
 import (
+	"context"
 	"log"
 
 	"cirello.io/pglock"
@@ -65,7 +66,7 @@ func main() {
 	if err := c.CreateTable(); err != nil {
 		log.Fatal("cannot create table:", err)
 	}
-	l, err := c.Acquire("lock-name")
+	l, err := c.AcquireContext(context.Background(), "lock-name")
 	if err != nil {
 		log.Fatal("unexpected error while acquiring 1st lock:", err)
 	}
@@ -81,12 +82,12 @@ like in the above example, and it will spawn a background goroutine that
 continually updates the record version number on your locks to prevent them from
 expiring (it does this by calling the `SendHeartbeat()` method in the lock
 client.) This will ensure that as long as your application is running, your
-locks will not expire until you call `Release()` or `lockItem.Close()`
+locks will not expire until you call `ReleaseContext()` or `lockItem.Close()`
 
 ### Read the data in a lock without acquiring it
 You can read the data in the lock without acquiring it. Here's how:
 ```Go
-lock, err := lockClient.Get("kirk");
+lock, err := lockClient.GetContext(context.Background(), "kirk");
 ```
 
 ## Logic to avoid problems with clock skew

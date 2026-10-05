@@ -175,6 +175,8 @@ func (c *Client) DropTable() error {
 
 // Acquire attempts to grab the lock with the given key name and wait until it
 // succeeds.
+//
+//go:fix inline
 func (c *Client) Acquire(name string, opts ...LockOption) (*Lock, error) {
 	return c.AcquireContext(context.Background(), name, opts...)
 }
@@ -307,6 +309,8 @@ func (c *Client) Do(ctx context.Context, name string, f func(context.Context, *L
 }
 
 // Release will update the mutex entry to be able to be taken by other clients.
+//
+//go:fix inline
 func (c *Client) Release(l *Lock) error {
 	return c.ReleaseContext(context.Background(), l)
 }
@@ -428,12 +432,16 @@ func (c *Client) storeHeartbeat(ctx context.Context, l *Lock) error {
 
 // GetData returns the data field from the given lock in the table without
 // holding the lock first.
+//
+//go:fix inline
 func (c *Client) GetData(name string) ([]byte, error) {
 	return c.GetDataContext(context.Background(), name)
 }
 
 // Get returns the lock object from the given name in the table without holding
 // it first.
+//
+//go:fix inline
 func (c *Client) Get(name string) (*Lock, error) {
 	return c.GetContext(context.Background(), name)
 }
@@ -507,6 +515,8 @@ func (c *Client) retry(f func() error) error {
 }
 
 // GetAllLocks returns all known locks in a read-only fashion.
+//
+//go:fix inline
 func (c *Client) GetAllLocks() ([]*ReadOnlyLock, error) {
 	return c.GetAllLocksContext(context.Background())
 }

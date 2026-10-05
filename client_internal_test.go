@@ -124,7 +124,7 @@ func TestDBErrorHandling(t *testing.T) {
 			client, mock, _ := setup()
 			badRVN := errors.New("cannot load next RVN")
 			mock.ExpectQuery(`SELECT nextval\(\$1\)`).WillReturnError(badRVN)
-			if _, err := client.Acquire("bad-rvn"); !errors.Is(err, badRVN) {
+			if _, err := client.AcquireContext(context.Background(), "bad-rvn"); !errors.Is(err, badRVN) {
 				t.Errorf("expected RVN error missing: %v", err)
 			}
 		})
@@ -133,7 +133,7 @@ func TestDBErrorHandling(t *testing.T) {
 			badInsert := errors.New("cannot insert")
 			mock.ExpectQuery(`SELECT nextval\(\$1\)`).WillReturnRows(sqlmock.NewRows([]string{"nextval"}).AddRow(1))
 			mock.ExpectQuery(`INSERT INTO locks (.+)`).WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg()).WillReturnError(badInsert)
-			if _, err := client.Acquire("bad-insert"); !errors.Is(err, badInsert) {
+			if _, err := client.AcquireContext(context.Background(), "bad-insert"); !errors.Is(err, badInsert) {
 				t.Errorf("expected RVN error missing: %v", err)
 			}
 		})
@@ -144,7 +144,7 @@ func TestDBErrorHandling(t *testing.T) {
 			badDelete := errors.New("cannot delete lock entry")
 			fakeLock.keepOnRelease = true
 			mock.ExpectExec(`UPDATE locks (.+)`).WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg()).WillReturnError(badDelete)
-			if err := client.Release(fakeLock); !errors.Is(err, badDelete) {
+			if err := client.ReleaseContext(context.Background(), fakeLock); !errors.Is(err, badDelete) {
 				t.Errorf("expected delete error missing: %v", err)
 			}
 		})
@@ -152,7 +152,7 @@ func TestDBErrorHandling(t *testing.T) {
 			client, mock, fakeLock := setup()
 			badDelete := errors.New("cannot delete lock entry")
 			mock.ExpectExec(`DELETE FROM locks (.+)`).WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg()).WillReturnError(badDelete)
-			if err := client.Release(fakeLock); !errors.Is(err, badDelete) {
+			if err := client.ReleaseContext(context.Background(), fakeLock); !errors.Is(err, badDelete) {
 				t.Errorf("expected delete error missing: %v", err)
 			}
 		})
