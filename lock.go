@@ -54,7 +54,7 @@ func (l *Lock) Data() []byte {
 
 // Close releases the lock and interrupts the locks heartbeat, if configured.
 func (l *Lock) Close() error {
-	err := l.client.Release(l)
+	err := l.client.ReleaseContext(context.Background(), l)
 	return err
 }
 

@@ -32,7 +32,7 @@ limitations under the License.
 //	if err != nil {
 //		log.Fatal("cannot create lock client:", err)
 //	}
-//	l1, err := c.Acquire(name)
+//	l1, err := c.AcquireContext(context.Background(), name)
 //	if err != nil {
 //		log.Fatal("unexpected error while acquiring 1st lock:", err)
 //	}
@@ -42,7 +42,7 @@ limitations under the License.
 //	var locked bool
 //	go func() {
 //		defer wg.Done()
-//		l2, err := c.Acquire(name)
+//		l2, err := c.AcquireContext(context.Background(), name)
 //		if err != nil {
 //			log.Fatal("unexpected error while acquiring 2nd lock:", err)
 //		}

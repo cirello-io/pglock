@@ -259,13 +259,13 @@ func TestFailIfLocked(t *testing.T) {
 	if err != nil {
 		t.Fatal("cannot create lock client:", err)
 	}
-	l, err := c.Acquire(name)
+	l, err := c.AcquireContext(context.Background(), name)
 	if err != nil {
 		t.Fatal("unexpected error while acquiring lock:", err)
 	}
 	defer l.Close()
 	t.Log("first lock acquired")
-	if _, err := c.Acquire(name, pglock.FailIfLocked()); !errors.Is(err, pglock.ErrNotAcquired) {
+	if _, err := c.AcquireContext(context.Background(), name, pglock.FailIfLocked()); !errors.Is(err, pglock.ErrNotAcquired) {
 		t.Fatal("expected ErrNotAcquired")
 	}
 }
@@ -288,7 +288,7 @@ func TestCustomHeartbeatContext(t *testing.T) {
 			t.Fatal("cannot create lock client:", err)
 		}
 		hbCtx, hbCancel := context.WithCancel(context.Background())
-		l, err := c.Acquire(name, pglock.WithCustomHeartbeatContext(hbCtx))
+		l, err := c.AcquireContext(context.Background(), name, pglock.WithCustomHeartbeatContext(hbCtx))
 		if err != nil {
 			t.Fatal("unexpected error while acquiring lock:", err)
 		}
@@ -317,7 +317,7 @@ func TestCustomHeartbeatContext(t *testing.T) {
 		if err != nil {
 			t.Fatal("cannot create lock client:", err)
 		}
-		l, err := c.Acquire(name)
+		l, err := c.AcquireContext(context.Background(), name)
 		if err != nil {
 			t.Fatal("unexpected error while acquiring lock:", err)
 		}
@@ -349,14 +349,14 @@ func TestKeepOnRelease(t *testing.T) {
 		t.Fatal("cannot create lock client:", err)
 	}
 	expected := []byte("42")
-	l, err := c.Acquire(name, pglock.KeepOnRelease(), pglock.WithData(expected))
+	l, err := c.AcquireContext(context.Background(), name, pglock.KeepOnRelease(), pglock.WithData(expected))
 	if err != nil {
 		t.Fatal("unexpected error while acquiring lock (take 1):", err)
 	}
 	t.Log("lock acquired")
 	l.Close()
 
-	l2, err := c.Acquire(name)
+	l2, err := c.AcquireContext(context.Background(), name)
 	if err != nil {
 		t.Fatal("unexpected error while acquiring lock (take 2):", err)
 	}
@@ -383,7 +383,7 @@ func TestClose(t *testing.T) {
 	if err != nil {
 		t.Fatal("cannot create lock client:", err)
 	}
-	l, err := c.Acquire(name)
+	l, err := c.AcquireContext(context.Background(), name)
 	if err != nil {
 		t.Fatal("unexpected error while acquiring lock:", err)
 	}
@@ -410,7 +410,7 @@ func TestAcquire(t *testing.T) {
 	if err != nil {
 		t.Fatal("cannot create lock client:", err)
 	}
-	l1, err := c.Acquire(name)
+	l1, err := c.AcquireContext(context.Background(), name)
 	if err != nil {
 		t.Fatal("unexpected error while acquiring 1st lock:", err)
 	}
@@ -421,7 +421,7 @@ func TestAcquire(t *testing.T) {
 	var err2 error
 	go func() {
 		defer wg.Done()
-		l2, err := c.Acquire(name)
+		l2, err := c.AcquireContext(context.Background(), name)
 		if err != nil {
 			err2 = err
 			return
@@ -462,7 +462,7 @@ func TestAcquire(t *testing.T) {
 				t.Fatal("cannot create lock client:", err)
 			}
 			key := randStr()
-			held, err := client.Acquire(key)
+			held, err := client.AcquireContext(context.Background(), key)
 			if err != nil {
 				t.Fatal("cannot acquire initial lock:", err)
 			}
@@ -528,13 +528,13 @@ func TestGet(t *testing.T) {
 			t.Fatal("cannot create lock client:", err)
 		}
 		expected := []byte("42")
-		l, err := c.Acquire(name, pglock.WithData(expected))
+		l, err := c.AcquireContext(context.Background(), name, pglock.WithData(expected))
 		if err != nil {
 			t.Fatal("unexpected error while acquiring lock:", err)
 		}
 		defer l.Close()
 
-		got, err := c.GetData(name)
+		got, err := c.GetDataContext(context.Background(), name)
 		if err != nil {
 			t.Fatal("cannot load data from the lock entry:", err)
 		} else if !bytes.Equal(got, expected) {
@@ -556,13 +556,13 @@ func TestGet(t *testing.T) {
 			t.Fatal("cannot create lock client:", err)
 		}
 		expectedData := []byte("42")
-		l, err := c.Acquire(name, pglock.WithData(expectedData))
+		l, err := c.AcquireContext(context.Background(), name, pglock.WithData(expectedData))
 		if err != nil {
 			t.Fatal("unexpected error while acquiring lock:", err)
 		}
 		defer l.Close()
 
-		got, err := c.Get(name)
+		got, err := c.GetContext(context.Background(), name)
 		if err != nil {
 			t.Fatal("cannot load data from the lock entry:", err)
 		} else if gotData := got.Data(); !bytes.Equal(gotData, expectedData) {
@@ -583,7 +583,7 @@ func TestGet(t *testing.T) {
 		if err != nil {
 			t.Fatal("cannot create lock client:", err)
 		}
-		if _, err := c.GetData(name); err == nil {
+		if _, err := c.GetDataContext(context.Background(), name); err == nil {
 			t.Fatal("expected error not found on loading unknown key")
 		} else if notFound := (&pglock.NotExistError{}); !errors.As(err, &notFound) {
 			t.Fatal("unexpected error kind found on loading unknown key:", err)
@@ -608,14 +608,14 @@ func TestLockData(t *testing.T) {
 			t.Fatal("cannot create lock client:", err)
 		}
 		expected := []byte("42")
-		l1, err := c.Acquire(name, pglock.WithData(expected))
+		l1, err := c.AcquireContext(context.Background(), name, pglock.WithData(expected))
 		if err != nil {
 			t.Fatal("unexpected error while acquiring lock:", err)
 		}
 		l1.Close()
 		t.Log("first lock stored")
 
-		l2, err := c.Acquire(name)
+		l2, err := c.AcquireContext(context.Background(), name)
 		if err != nil {
 			t.Fatal("unexpected error while acquiring lock:", err)
 		}
@@ -638,7 +638,7 @@ func TestLockData(t *testing.T) {
 			t.Fatal("cannot create lock client:", err)
 		}
 
-		l1, err := c.Acquire(name, pglock.WithData([]byte("original")))
+		l1, err := c.AcquireContext(context.Background(), name, pglock.WithData([]byte("original")))
 		if err != nil {
 			t.Fatal("unexpected error while acquiring lock:", err)
 		}
@@ -646,7 +646,7 @@ func TestLockData(t *testing.T) {
 		t.Log("first lock stored")
 
 		expected := []byte("42")
-		l2, err := c.Acquire(name, pglock.WithData(expected), pglock.ReplaceData())
+		l2, err := c.AcquireContext(context.Background(), name, pglock.WithData(expected), pglock.ReplaceData())
 		if err != nil {
 			t.Fatal("unexpected error while acquiring lock:", err)
 		}
@@ -680,7 +680,7 @@ func TestCustomTable(t *testing.T) {
 		if err := c.CreateTable(); err != nil {
 			t.Fatal("cannot create table:", err)
 		}
-		l1, err := c.Acquire(name)
+		l1, err := c.AcquireContext(context.Background(), name)
 		if err != nil {
 			t.Fatal("unexpected error while acquiring lock:", err)
 		}
@@ -730,7 +730,7 @@ func TestCustomTableIdemPotent(t *testing.T) {
 		if err := c.CreateTable(); err != nil {
 			t.Fatal("cannot create table:", err)
 		}
-		l1, err := c.Acquire(name)
+		l1, err := c.AcquireContext(context.Background(), name)
 		if err != nil {
 			t.Fatal("unexpected error while acquiring lock:", err)
 		}
@@ -922,7 +922,7 @@ func TestDo(t *testing.T) {
 		if err != nil {
 			t.Fatal("cannot create lock client:", err)
 		}
-		if _, err := c.Acquire(name); err != nil {
+		if _, err := c.AcquireContext(context.Background(), name); err != nil {
 			t.Fatal("cannot grab lock:", err)
 		}
 		err = c.Do(context.Background(), name, func(context.Context, *pglock.Lock) error {
@@ -931,7 +931,7 @@ func TestDo(t *testing.T) {
 		if !errors.Is(err, pglock.ErrNotAcquired) {
 			t.Fatal("unexpected error while running under lock:", err)
 		}
-		if _, err := c.Acquire(name); err != nil {
+		if _, err := c.AcquireContext(context.Background(), name); err != nil {
 			t.Fatal("cannot grab lock:", err)
 		}
 		err = c.Do(context.Background(), name, func(context.Context, *pglock.Lock) error {
@@ -965,7 +965,7 @@ func TestOwner(t *testing.T) {
 	if err != nil {
 		t.Fatal("cannot create lock client:", err)
 	}
-	l1, err := c.Acquire(lockName)
+	l1, err := c.AcquireContext(context.Background(), lockName)
 	if err != nil {
 		t.Fatal("unexpected error while acquiring 1st lock:", err)
 	}
@@ -1014,11 +1014,11 @@ func TestSendHeartbeat(t *testing.T) {
 			t.Fatal("cannot create lock client:", err)
 		}
 		name := randStr()
-		l, err := c.Acquire(name)
+		l, err := c.AcquireContext(context.Background(), name)
 		if err != nil {
 			t.Fatal("unexpected error while acquiring lock:", err)
 		}
-		if err := c.Release(l); err != nil {
+		if err := c.ReleaseContext(context.Background(), l); err != nil {
 			t.Fatal("unexpected error while releasing lock:", err)
 		}
 		err = c.SendHeartbeat(context.Background(), l)
@@ -1039,7 +1039,7 @@ func TestSendHeartbeat(t *testing.T) {
 			t.Fatal("cannot create lock client:", err)
 		}
 		name := randStr()
-		l, err := c.Acquire(name)
+		l, err := c.AcquireContext(context.Background(), name)
 		if err != nil {
 			t.Fatal("unexpected error while acquiring lock:", err)
 		}
@@ -1049,7 +1049,7 @@ func TestSendHeartbeat(t *testing.T) {
 			t.Errorf("sendHeartbeat failed: %v", err)
 		}
 		t.Log("RVN:", l.RecordVersionNumber())
-		if err := c.Release(l); err != nil {
+		if err := c.ReleaseContext(context.Background(), l); err != nil {
 			t.Fatal("unexpected error while releasing lock:", err)
 		}
 	})
@@ -1070,7 +1070,7 @@ func testSendHeartbeatRacy(t *testing.T) {
 		t.Fatal("cannot create lock client:", err)
 	}
 	name := randStr()
-	l, err := c.Acquire(name)
+	l, err := c.AcquireContext(context.Background(), name)
 	if err != nil {
 		t.Fatal("unexpected error while acquiring lock:", err)
 	}
@@ -1081,7 +1081,7 @@ func testSendHeartbeatRacy(t *testing.T) {
 	releaseErr := make(chan error, 1)
 	go func() {
 		defer wg.Done()
-		if err := c.Release(l); err != nil {
+		if err := c.ReleaseContext(context.Background(), l); err != nil {
 			releaseErr <- err
 			return
 		}
@@ -1111,7 +1111,7 @@ func TestReleaseLostLock(t *testing.T) {
 	if err != nil {
 		t.Fatal("cannot create lock client:", err)
 	}
-	l, err := c.Acquire(name)
+	l, err := c.AcquireContext(context.Background(), name)
 	if err != nil {
 		t.Fatal("cannot acquire lock:", err)
 	}
@@ -1119,7 +1119,7 @@ func TestReleaseLostLock(t *testing.T) {
 	if err := releaseLockByName(db, tableName, name); err != nil {
 		t.Fatalf("cannot forcefully release lock: %v", err)
 	}
-	t.Log(c.Release(l))
+	t.Log(c.ReleaseContext(context.Background(), l))
 	if !l.IsReleased() {
 		t.Fatal("expected lock to be released")
 	}
@@ -1155,7 +1155,7 @@ func TestIssue29(t *testing.T) {
 						return
 					default:
 					}
-					lock, err := c.Acquire(lockName)
+					lock, err := c.AcquireContext(context.Background(), lockName)
 					if err != nil {
 						if strings.Contains(err.Error(), "could not serialize access due to") {
 							foundErrMu.Lock()
@@ -1291,13 +1291,13 @@ func TestGetAllLocks(t *testing.T) {
 	expected := []byte("42")
 	for range 5 {
 		name := randStr()
-		if _, err := c.Acquire(name, pglock.WithData(expected)); err != nil {
+		if _, err := c.AcquireContext(context.Background(), name, pglock.WithData(expected)); err != nil {
 			t.Fatal("unexpected error while acquiring lock:", err)
 		}
 		names[name] = struct{}{}
 	}
 	t.Logf("%#v", names)
-	locks, err := c.GetAllLocks()
+	locks, err := c.GetAllLocksContext(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1341,7 +1341,7 @@ func TestStaleAfterRelease(t *testing.T) {
 		lockName := fmt.Sprint("lock-name-", i)
 		group.Go(func() error {
 			<-start
-			l, err := c.Acquire(lockName)
+			l, err := c.AcquireContext(context.Background(), lockName)
 			if err != nil {
 				return fmt.Errorf("cannot acquire lock (%q): %w", lockName, err)
 			}
@@ -1388,7 +1388,7 @@ func TestOverflowSequence(t *testing.T) {
 		t.Fatal("cannot reset sequence:", err)
 	}
 	for range 10 {
-		l1, err := c.Acquire(name)
+		l1, err := c.AcquireContext(context.Background(), name)
 		if err != nil {
 			t.Fatal("unexpected error while acquiring lock:", err)
 		}
