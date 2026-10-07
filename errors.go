@@ -96,7 +96,7 @@ var ErrLockNotFound = &NotExistError{errors.New("lock not found")}
 
 // Validation errors.
 var (
-	ErrDurationTooSmall = errors.New("Heartbeat period must be no more than half the length of the Lease Duration, " +
+	ErrDurationTooSmall = errors.New("heartbeat period must be no more than half the length of the Lease Duration, " +
 		"or locks might expire due to the heartbeat thread taking too long to update them (recommendation is to make it much greater, for example " +
 		"4+ times greater)")
 )

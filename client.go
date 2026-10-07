@@ -559,6 +559,7 @@ type ClientOption func(*Client)
 
 // WithLogger injects a logger into the client, so its internals can be
 // recorded.
+//
 // Deprecated: Use WithLevelLogger instead.
 func WithLogger(l Logger) ClientOption {
 	return func(c *Client) { c.log = &flatLogger{l} }
