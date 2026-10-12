@@ -36,7 +36,7 @@ jobs:
       uses: actions/cache@v6
       with:
         path: ~/go/bin/golangci-lint
-        key: ${{ runner.os }}-golangci-lint-v2.4.0
+        key: ${{ runner.os }}-golangci-lint-v2.14.0
 
     - name: Test
       run: |
