@@ -1,0 +1,10 @@
+version: "2"
+linters:
+  default: none
+  exclusions:
+    # v1 enabled these presets by default. v2 does not.
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
