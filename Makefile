@@ -1,4 +1,4 @@
-GOLANGCI_LINT := go run -mod=readonly github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0
+GOLANGCI_LINT := go run -mod=readonly github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0
 
 linters:
 	$(GOLANGCI_LINT) run --default=none \
